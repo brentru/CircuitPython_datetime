@@ -85,6 +85,10 @@ def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_i
                              tm_hour, tm_min, tm_sec, tm_wday,
                              tm_yday, tm_isdst))
 
+def _getstate(self):
+    yhi, ylo = divmod(self._year, 256)
+    return bytes([yhi, ylo, self._month, self._day]),
+
 def _format_time(hh, mm, ss, us):
     # Skip trailing microseconds when us==0.
     result = "%02d:%02d:%02d" % (hh, mm, ss)
@@ -107,6 +111,7 @@ assert _DI400Y == 4 * _DI100Y + 1
 # OTOH, a 100-year cycle has one fewer leap day than we'd get from
 # pasting together 25 4-year cycles.
 assert _DI100Y == 25 * _DI4Y - 1
+
 
 def _ord2ymd(n):
     "ordinal -> (year, month, day), considering 01-Jan-0001 as day 1."
@@ -169,6 +174,8 @@ def _ord2ymd(n):
     # Now the year and month are correct, and n is the offset from the
     # start of that month:  we're done!
     return year, month, n+1
+
+
 
 class date:
     """A date object represents a date (year, month and day) in an idealized calendar,
@@ -284,3 +291,7 @@ class date:
 
     # For a date d, str(d) is equivalent to d.isoformat()
     __str__ = isoformat
+
+    def __hash__(self):
+        "Hash."
+        return hash(self._getstate())
