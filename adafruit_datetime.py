@@ -64,6 +64,11 @@ def _days_before_month(year, month):
     assert 1 <= month <= 12, 'month must be in 1..12'
     return _DAYS_BEFORE_MONTH[month] + (month > 2 and _is_leap(year))
 
+def _days_before_year(year):
+    "year -> number of days before January 1st of year."
+    y = year - 1
+    return y*365 + y//4 - y//100 + y//400
+
 def _ymd2ord(year, month, day):
     "year, month, day -> ordinal, considering 01-Jan-0001 as day 1."
     assert 1 <= month <= 12, 'month must be in 1..12'
@@ -73,7 +78,6 @@ def _ymd2ord(year, month, day):
             _days_before_month(year, month) +
             day)
 
-
 def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_isdst):
     tm_wday = (_ymd2ord(tm_year, tm_month, tm_mday) + 6) % 7
     tm_yday = _days_before_month(tm_year, tm_month) + tm_mday
@@ -81,10 +85,12 @@ def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_i
                              tm_hour, tm_min, tm_sec, tm_wday,
                              tm_yday, tm_isdst))
 
-def _days_before_year(year):
-    "year -> number of days before January 1st of year."
-    y = year - 1
-    return y*365 + y//4 - y//100 + y//400
+def _format_time(hh, mm, ss, us):
+    # Skip trailing microseconds when us==0.
+    result = "%02d:%02d:%02d" % (hh, mm, ss)
+    if us:
+        result += ".%06d" % us
+    return result
 
 _DI400Y = _days_before_year(401)    # number of days in 400 years
 _DI100Y = _days_before_year(101)    #    "    "   "   " 100   "
@@ -201,7 +207,6 @@ class date:
         return self._day
 
     # Class methods
-
     @classmethod
     def fromtimestamp(cls, t):
         """Return the local date corresponding to the POSIX timestamp,
@@ -231,8 +236,6 @@ class date:
         """Return a date corresponding to a date_string given in the format YYYY-MM-DD."""
         # TODO - this is not within the datetime impl but we should implement it!
         raise NotImplementedError()
-
-    # TODO: Add class attributes like min, max
 
     # Instance methods
     def __repr__(self):
@@ -267,3 +270,17 @@ class date:
         """
         return _build_struct_time(self._year, self._month, self._day,
                                   0, 0, 0, -1)
+
+    def toordinal(self):
+        """Return the proleptic Gregorian ordinal of the date, where January 1 of
+        year 1 has ordinal 1.
+        """
+        return _ymd2ord(self._year, self._month, self._day)
+
+    def isoformat(self):
+        """Return a string representing the date in ISO 8601 format, YYYY-MM-DD:
+        """
+        return "%04d-%02d-%02d" % (self._year, self._month, self._day)
+
+    # For a date d, str(d) is equivalent to d.isoformat()
+    __str__ = isoformat
