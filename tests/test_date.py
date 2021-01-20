@@ -75,11 +75,11 @@ class TestDate(unittest.TestCase):
     def test_weekday(self):
         for i in range(7):
             # March 4, 2002 is a Monday
-            self.assertEqual(cpy_date(2002, 3, 4+i).weekday(), i)
-            self.assertEqual(cpy_date(2002, 3, 4+i).isoweekday(), i+1)
+            self.assertEqual(cpy_date(2002, 3, 4+i).weekday(), cpython_date(2002, 3, 4+i).weekday())
+            self.assertEqual(cpy_date(2002, 3, 4+i).isoweekday(), cpython_date(2002, 3, 4+i).isoweekday())
             # January 2, 1956 is a Monday
-            self.assertEqual(cpy_date(1956, 1, 2+i).weekday(), i)
-            self.assertEqual(cpy_date(1956, 1, 2+i).isoweekday(), i+1)
+            self.assertEqual(cpy_date(1956, 1, 2+i).weekday(), cpython_date(1956, 1, 2+i).weekday())
+            self.assertEqual(cpy_date(1956, 1, 2+i).isoweekday(), cpython_date(1956, 1, 2+i).isoweekday())
 
 
 if __name__ == '__main__':
