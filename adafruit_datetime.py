@@ -29,6 +29,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
 
 # Utility functions
 
+
 # The datetime module exports the following constants:
 MINYEAR = 1
 MAXYEAR = 9999
@@ -37,6 +38,23 @@ MAXYEAR = 9999
 _DAYS_IN_MONTH = [None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 _DAYS_BEFORE_MONTH = [None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
 
+# time 
+def _check_time_fields(hour, minute, second, microsecond, fold):
+    if not isinstance(hour, int):
+        raise TypeError('Hour expected as int')
+    if not 0 <= hour <= 23:
+        raise ValueError('hour must be in 0..23', hour)
+    if not 0 <= minute <= 59:
+        raise ValueError('minute must be in 0..59', minute)
+    if not 0 <= second <= 59:
+        raise ValueError('second must be in 0..59', second)
+    if not 0 <= microsecond <= 999999:
+        raise ValueError('microsecond must be in 0..999999', microsecond)
+    if fold not in (0, 1): # from CPython API
+        raise ValueError('fold must be either 0 or 1', fold)
+    
+
+# date
 def _is_leap(year):
     "year -> 1 if leap year, else 0."
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
@@ -176,7 +194,6 @@ def _ord2ymd(n):
     return year, month, n+1
 
 
-
 class date:
     """A date object represents a date (year, month and day) in an idealized calendar,
     the current Gregorian calendar indefinitely extended in both directions.
@@ -295,3 +312,75 @@ class date:
     def __hash__(self):
         "Hash."
         return hash(self._getstate())
+
+
+class time:
+    """A time object represents a (local) time of day, independent of
+    any particular day, and subject to adjustment via a tzinfo object.
+
+    """
+    # Using __slots__ to reduce object's RAM usage
+    __slots__ = '_hour', '_minute', '_second', '_microsecond', '_tzinfo', '_hashcode', '_fold'
+
+    def __new__(cls, hour=0, minute=0, second=0, microsecond=0, tzinfo=None, *, fold=0):
+        _check_time_fields(hour,minute, second, microsecond, fold)
+        # TODO: Impl. tzinfo checks
+        # _check_tzinfo_arg(tzinfo)
+        self = object.__new__(cls)
+        self._hour = hour
+        self._minute = minute
+        self._second = second
+        self._microsecond = microsecond
+        self._tzinfo = tzinfo
+        self._fold = fold
+        return self
+
+    # Instance attributes (read-only)
+
+    @property
+    def hour(self):
+        """In range(24).
+        """
+        return self._hour
+
+    @property
+    def minute(self):
+        """In range(60)."""
+        return self._minute
+
+    @property
+    def second(self):
+        """In range(60)."""
+        return self._second
+
+    @property
+    def microsecond(self):
+        """In range(1000000)."""
+        return self._microsecond
+
+    @property
+    def tzinfo(self):
+        """The object passed as the tzinfo argument to
+        the time constructor, or None if none was passed.
+
+        """
+        return self._microsecond
+
+    @property
+    def fold(self):
+        """In [0, 1]. Used to disambiguate wall times during a repeated interval."""
+        return self._fold
+
+    # TODO: Time comparisons
+
+    # fromisoformat
+
+    # isoformat 
+
+    # strftime
+
+    # __format__
+
+    # dst - requires tzinfo
+
+    # tzname?? - rezuires tzinfo
