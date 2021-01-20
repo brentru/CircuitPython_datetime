@@ -38,6 +38,10 @@ MAXYEAR = 9999
 _DAYS_IN_MONTH = [None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
 _DAYS_BEFORE_MONTH = [None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
 
+# universally shared
+def _cmp(x, y):
+    return 0 if x == y else 1 if x > y else -1
+
 # time 
 def _check_time_fields(hour, minute, second, microsecond, fold):
     if not isinstance(hour, int):
@@ -312,9 +316,44 @@ class date:
     # For a date d, str(d) is equivalent to d.isoformat()
     __str__ = isoformat
 
+    # Comparisons of date objects with other
+
+    def __eq__(self, other):
+        if isinstance(other, date):
+            return self._cmp(other) == 0
+        return NotImplemented
+
+    def __le__(self, other):
+        if isinstance(other, date):
+            return self._cmp(other) <= 0
+        return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(other, date):
+            return self._cmp(other) < 0
+        return NotImplemented
+
+    def __ge__(self, other):
+        if isinstance(other, date):
+            return self._cmp(other) >= 0
+        return NotImplemented
+
+    def __gt__(self, other):
+        if isinstance(other, date):
+            return self._cmp(other) > 0
+        return NotImplemented
+
+    def _cmp(self, other):
+        assert isinstance(other, date)
+        y, m, d = self._year, self._month, self._day
+        y2, m2, d2 = other._year, other._month, other._day
+        return _cmp((y, m, d), (y2, m2, d2))
+
     def __hash__(self):
         "Hash."
-        return hash(self._getstate())
+        if self._hashcode == -1:
+            self._hashcode = hash(self._getstate())
+        return self._hashcode
 
 
 class time:
@@ -339,7 +378,6 @@ class time:
         return self
 
     # Instance attributes (read-only)
-
     @property
     def hour(self):
         """In range(24).
@@ -374,10 +412,69 @@ class time:
         """In [0, 1]. Used to disambiguate wall times during a repeated interval."""
         return self._fold
 
-    # TODO: Time comparisons
-    # requires timedelta()
+    # Standard conversions and comparisons
+    # From CPython, https://github.com/python/cpython/blob/master/Lib/datetime.py
+    def __eq__(self, other):
+        if isinstance(other, time):
+            return self._cmp(other, allow_mixed=True) == 0
+        else:
+            return NotImplemented
+
+    def __le__(self, other):
+        if isinstance(other, time):
+            return self._cmp(other) <= 0
+        else:
+            return NotImplemented
+
+    def __lt__(self, other):
+        if isinstance(other, time):
+            return self._cmp(other) < 0
+        else:
+            return NotImplemented
+
+    def __ge__(self, other):
+        if isinstance(other, time):
+            return self._cmp(other) >= 0
+        else:
+            return NotImplemented
+
+    def __gt__(self, other):
+        if isinstance(other, time):
+            return self._cmp(other) > 0
+        else:
+            return NotImplemented
+
+    def _cmp(self, other, allow_mixed=False):
+        assert isinstance(other, time)
+        mytz = self._tzinfo
+        ottz = other._tzinfo
+        myoff = otoff = None
+
+        if mytz is ottz:
+            base_compare = True
+        else:
+            myoff = self.utcoffset()
+            otoff = other.utcoffset()
+            base_compare = myoff == otoff
+
+        if base_compare:
+            return _cmp((self._hour, self._minute, self._second,
+                         self._microsecond),
+                        (other._hour, other._minute, other._second,
+                         other._microsecond))
+        if myoff is None or otoff is None:
+            if allow_mixed:
+                return 2 # arbitrary non-zero value
+            else:
+                raise TypeError("cannot compare naive and aware times")
+        myhhmm = self._hour * 60 + self._minute - myoff//timedelta(minutes=1)
+        othhmm = other._hour * 60 + other._minute - otoff//timedelta(minutes=1)
+        return _cmp((myhhmm, self._second, self._microsecond),
+                    (othhmm, other._second, other._microsecond))
 
     # Instance methods
+    def replace():
+        raise NotImplementedError
 
     def isoformat(self, timespec='auto'):
         """Return a string representing the time in ISO 8601 format, one of:
@@ -397,16 +494,15 @@ class time:
             s += tz
         return s
 
+    # For a time t, str(t) is equivalent to t.isoformat()
     __str__ = isoformat
 
-    # fromisoformat
+    # Timezone functions
+    def utcoffset():
+        raise NotImplementedError()
+    
+    def tzname():
+        raise NotImplementedError()
 
-    # isoformat 
-
-    # strftime
-
-    # __format__
-
-    # dst - requires tzinfo
-
-    # tzname?? - rezuires tzinfo
+    def dst():
+        raise NotImplementedError()
