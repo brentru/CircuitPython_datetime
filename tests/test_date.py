@@ -72,5 +72,15 @@ class TestDate(unittest.TestCase):
         self.assertEqual(d.month, month)
         self.assertEqual(d.day, day)
 
+    def test_weekday(self):
+        for i in range(7):
+            # March 4, 2002 is a Monday
+            self.assertEqual(cpy_date(2002, 3, 4+i).weekday(), i)
+            self.assertEqual(cpy_date(2002, 3, 4+i).isoweekday(), i+1)
+            # January 2, 1956 is a Monday
+            self.assertEqual(cpy_date(1956, 1, 2+i).weekday(), i)
+            self.assertEqual(cpy_date(1956, 1, 2+i).isoweekday(), i+1)
+
+
 if __name__ == '__main__':
     unittest.main()

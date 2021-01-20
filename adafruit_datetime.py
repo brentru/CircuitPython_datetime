@@ -21,8 +21,8 @@ Implementation Notes
 
 
 """
-import time
-import math
+import time as _time
+import math as _math
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
@@ -203,6 +203,7 @@ class date:
     Objects of this type are always naive.
 
     """
+    __slots__ = '_year', '_month', '_day', '_hashcode'
     def __new__(cls, year, month, day):
         """Creates a new date object.
 
@@ -211,12 +212,12 @@ class date:
         :param int day: Day within range, 1 <= day <= number of days in the given month and year
         """
         _check_date_fields(year, month, day)
-        instance = object.__new__(cls)
-        instance._year = year
-        instance._month = month
-        instance._day = day
-        instance._hashcode = -1
-        return instance
+        self = object.__new__(cls)
+        self._year = year
+        self._month = month
+        self._day = day
+        self._hashcode = -1
+        return self
 
     # Instance attributes, read-only
     @property
@@ -240,7 +241,7 @@ class date:
         """Return the local date corresponding to the POSIX timestamp,
         such as is returned by time.time().
         """
-        tm_year, tm_mon, tm_mday, tm_hour, tm_min, tm_sec, tm_wday, tm_yday, tm_isdst = time.localtime(t)
+        tm_year, tm_mon, tm_mday, tm_hour, tm_min, tm_sec, tm_wday, tm_yday, tm_isdst = _time.localtime(t)
         return cls(tm_year, tm_mon, tm_mday)
 
     @classmethod
@@ -305,6 +306,15 @@ class date:
         """
         return _ymd2ord(self._year, self._month, self._day)
 
+    def weekday(self):
+        """Return the day of the week as an integer, where Monday is 0 and Sunday is 6."""
+        return (self.toordinal() + 6) % 7
+
+    # ISO date
+    def isoweekday(self):
+        """Return the day of the week as an integer, where Monday is 1 and Sunday is 7."""
+        return self.toordinal() % 7 or 7
+
     def isoformat(self):
         """Return a string representing the date in ISO 8601 format, YYYY-MM-DD:
         """
@@ -356,6 +366,9 @@ class date:
     def _getstate(self):
         yhi, ylo = divmod(self._year, 256)
         return bytes([yhi, ylo, self._month, self._day]),
+
+    def __reduce__(self):
+        return (self.__class__, self._getstate())
 
 class time:
     """A time object represents a (local) time of day, independent of
