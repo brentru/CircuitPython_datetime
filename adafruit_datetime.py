@@ -107,12 +107,15 @@ def _getstate(self):
     yhi, ylo = divmod(self._year, 256)
     return bytes([yhi, ylo, self._month, self._day]),
 
-def _format_time(hh, mm, ss, us):
-    # Skip trailing microseconds when us==0.
-    result = "%02d:%02d:%02d" % (hh, mm, ss)
+def _format_time(hh, mm, ss, us, timespec='auto'):
+    if timespec != "auto":
+        raise NotImplementedError("Only default timespec supported")
     if us:
-        result += ".%06d" % us
-    return result
+        spec = '{:02d}:{:02d}:{:02d}.{:06d}'
+    else:
+        spec = '{:02d}:{:02d}:{:02d}'
+    fmt = spec
+    return fmt.format(hh, mm, ss, us)
 
 _DI400Y = _days_before_year(401)    # number of days in 400 years
 _DI100Y = _days_before_year(101)    #    "    "   "   " 100   "
@@ -372,6 +375,29 @@ class time:
         return self._fold
 
     # TODO: Time comparisons
+    # requires timedelta()
+
+    # Instance methods
+
+    def isoformat(self, timespec='auto'):
+        """Return a string representing the time in ISO 8601 format, one of:
+        HH:MM:SS.ffffff, if microsecond is not 0
+
+        HH:MM:SS, if microsecond is 0
+
+        HH:MM:SS.ffffff+HH:MM[:SS[.ffffff]], if utcoffset() does not return None
+
+        HH:MM:SS+HH:MM[:SS[.ffffff]], if microsecond is 0 and utcoffset() does not return None
+
+        """
+        s = _format_time(self._hour, self._minute, self._second,
+                          self._microsecond, timespec)
+        tz = self._tzstr()
+        if tz:
+            s += tz
+        return s
+
+    __str__ = isoformat
 
     # fromisoformat
 
