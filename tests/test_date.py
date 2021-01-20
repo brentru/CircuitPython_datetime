@@ -7,7 +7,7 @@ from datetime import MINYEAR, MAXYEAR
 sys.path.append("..")
 from adafruit_datetime import date as cpy_date
 
-class TestDates(unittest.TestCase):
+class TestDate(unittest.TestCase):
 
     def test_basic_attributes(self):
         dt = cpy_date(2002, 3, 1)
@@ -40,7 +40,6 @@ class TestDates(unittest.TestCase):
 
     def test_hash_equality(self):
         d = cpy_date(2000, 12, 31)
-        # same thing
         e = cpy_date(2000, 12, 31)
         self.assertEqual(d, e)
         self.assertEqual(hash(d), hash(e))
@@ -52,7 +51,6 @@ class TestDates(unittest.TestCase):
         self.assertEqual(dic[e], 2)
 
         d = cpy_date(2001,  1,  1)
-        # same thing
         e = cpy_date(2001,  1,  1)
         self.assertEqual(d, e)
         self.assertEqual(hash(d), hash(e))
@@ -63,7 +61,16 @@ class TestDates(unittest.TestCase):
         self.assertEqual(dic[d], 2)
         self.assertEqual(dic[e], 2)
 
-    # TODO: Ordinal conversion failure
+    def test_fromtimestamp(self):
+        import time
+
+        # Try an arbitrary fixed value.
+        year, month, day = 1999, 9, 19
+        ts = time.mktime((year, month, day, 0, 0, 0, 0, 0, -1))
+        d = cpy_date.fromtimestamp(ts)
+        self.assertEqual(d.year, year)
+        self.assertEqual(d.month, month)
+        self.assertEqual(d.day, day)
 
 if __name__ == '__main__':
     unittest.main()
