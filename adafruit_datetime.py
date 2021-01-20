@@ -103,7 +103,7 @@ def _ymd2ord(year, month, day):
 def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_isdst):
     tm_wday = (_ymd2ord(tm_year, tm_month, tm_mday) + 6) % 7
     tm_yday = _days_before_month(tm_year, tm_month) + tm_mday
-    return time.struct_time((tm_year, tm_month, tm_mday,
+    return _time.struct_time((tm_year, tm_month, tm_mday,
                              tm_hour, tm_min, tm_sec, tm_wday,
                              tm_yday, tm_isdst))
 

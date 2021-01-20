@@ -201,6 +201,62 @@ class TestDate(unittest.TestCase):
             self.assertEqual(a.__format__(fmt), dt.strftime(fmt))
             self.assertEqual(b.__format__(fmt), 'B')"""
 
+    @unittest.skip("Skip for CircuitPython - min/max/resolution not implemented for date objects.")
+    def test_resolution_info(self):
+        # XXX: Should min and max respect subclassing?
+        if issubclass(self.theclass, datetime):
+            expected_class = datetime
+        else:
+            expected_class = date
+        self.assertIsInstance(self.theclass.min, expected_class)
+        self.assertIsInstance(self.theclass.max, expected_class)
+        self.assertIsInstance(self.theclass.resolution, timedelta)
+        self.assertTrue(self.theclass.max > self.theclass.min)
+
+    # TODO: Needs timedelta
+    @unittest.skip("Skip for CircuitPython - timedelta not implemented.")
+    def test_extreme_timedelta(self):
+        big = self.theclass.max - self.theclass.min
+        # 3652058 days, 23 hours, 59 minutes, 59 seconds, 999999 microseconds
+        n = (big.days*24*3600 + big.seconds)*1000000 + big.microseconds
+        # n == 315537897599999999 ~= 2**58.13
+        justasbig = timedelta(0, 0, n)
+        self.assertEqual(big, justasbig)
+        self.assertEqual(self.theclass.min + big, self.theclass.max)
+        self.assertEqual(self.theclass.max - big, self.theclass.min)
+
+
+    def test_timetuple(self):
+        for i in range(7):
+            # January 2, 1956 is a Monday (0)
+            d = cpy_date(1956, 1, 2+i)
+            t = d.timetuple()
+            d2 = cpython_date(1956, 1, 2+i)
+            t2 = d2.timetuple()
+            self.assertEqual(t, t2)
+            # February 1, 1956 is a Wednesday (2)
+            d = cpy_date(1956, 2, 1+i)
+            t = d.timetuple()
+            d2 = cpython_date(1956, 2, 1+i)
+            t2 = d2.timetuple()
+            self.assertEqual(t, t2)
+            # March 1, 1956 is a Thursday (3), and is the 31+29+1 = 61st day
+            # of the year.
+            d = cpy_date(1956, 3, 1+i)
+            t = d.timetuple()
+            d2 = cpython_date(1956, 3, 1+i)
+            t2 = d2.timetuple()
+            self.assertEqual(t, t2)
+            self.assertEqual(t.tm_year, t2.tm_year)
+            self.assertEqual(t.tm_mon, t2.tm_mon)
+            self.assertEqual(t.tm_mday, t2.tm_mday)
+            self.assertEqual(t.tm_hour, t2.tm_hour)
+            self.assertEqual(t.tm_min, t2.tm_min)
+            self.assertEqual(t.tm_sec, t2.tm_sec)
+            self.assertEqual(t.tm_wday, t2.tm_wday)
+            self.assertEqual(t.tm_yday, t2.tm_yday)
+            self.assertEqual(t.tm_isdst, t2.tm_isdst)
+
 
 if __name__ == '__main__':
     unittest.main()
