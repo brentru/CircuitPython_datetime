@@ -7,6 +7,11 @@ from datetime import MINYEAR, MAXYEAR
 sys.path.append("..")
 from adafruit_datetime import date as cpy_date
 
+# An arbitrary collection of objects of non-datetime types, for testing
+# mixed-type comparisons.
+OTHERSTUFF = (10, 34.5, "abc", {}, [], ())
+
+
 class TestDate(unittest.TestCase):
 
     def test_basic_attributes(self):
@@ -79,9 +84,9 @@ class TestDate(unittest.TestCase):
         # We claim that today() is like fromtimestamp(time.time()), so
         # prove it.
         for dummy in range(3):
-            today = self.theclass.today()
+            today = cpy_date.today()
             ts = time.time()
-            todayagain = self.theclass.fromtimestamp(ts)
+            todayagain = cpy_date.fromtimestamp(ts)
             if today == todayagain:
                 break
             # There are several legit reasons that could fail:
@@ -115,17 +120,17 @@ class TestDate(unittest.TestCase):
         # Check examples from
         # http://www.phys.uu.nl/~vgent/calendar/isocalendar.htm
         for i in range(7):
-            d = self.theclass(2003, 12, 22+i)
+            d = cpy_date(2003, 12, 22+i)
             self.assertEqual(d.isocalendar(), (2003, 52, i+1))
-            d = self.theclass(2003, 12, 29) + timedelta(i)
+            d = cpy_date(2003, 12, 29) + timedelta(i)
             self.assertEqual(d.isocalendar(), (2004, 1, i+1))
-            d = self.theclass(2004, 1, 5+i)
+            d = cpy_date(2004, 1, 5+i)
             self.assertEqual(d.isocalendar(), (2004, 2, i+1))
-            d = self.theclass(2009, 12, 21+i)
+            d = cpy_date(2009, 12, 21+i)
             self.assertEqual(d.isocalendar(), (2009, 52, i+1))
-            d = self.theclass(2009, 12, 28) + timedelta(i)
+            d = cpy_date(2009, 12, 28) + timedelta(i)
             self.assertEqual(d.isocalendar(), (2009, 53, i+1))
-            d = self.theclass(2010, 1, 4+i)
+            d = cpy_date(2010, 1, 4+i)
             self.assertEqual(d.isocalendar(), (2010, 1, i+1))
 
     def test_isoformat(self):
@@ -137,12 +142,12 @@ class TestDate(unittest.TestCase):
 
     @unittest.skip("Skip for CircuitPython - ctime() not implemented for date objects.")
     def test_ctime(self):
-        t = self.theclass(2002, 3, 2)
+        t = cpy_date(2002, 3, 2)
         self.assertEqual(t.ctime(), "Sat Mar  2 00:00:00 2002")
 
     @unittest.skip("Skip for CircuitPython - strftime() not implemented for date objects.")
     def test_strftime(self):
-        t = self.theclass(2005, 3, 2)
+        t = cpy_date(2005, 3, 2)
         self.assertEqual(t.strftime("m:%m d:%d y:%y"), "m:03 d:02 y:05")
         self.assertEqual(t.strftime(""), "") # SF bug #761337
 #        self.assertEqual(t.strftime('x'*1000), 'x'*1000) # SF bug #1556784
@@ -204,27 +209,26 @@ class TestDate(unittest.TestCase):
     @unittest.skip("Skip for CircuitPython - min/max/resolution not implemented for date objects.")
     def test_resolution_info(self):
         # XXX: Should min and max respect subclassing?
-        if issubclass(self.theclass, datetime):
+        if issubclass(cpy_date, datetime):
             expected_class = datetime
         else:
             expected_class = date
-        self.assertIsInstance(self.theclass.min, expected_class)
-        self.assertIsInstance(self.theclass.max, expected_class)
-        self.assertIsInstance(self.theclass.resolution, timedelta)
-        self.assertTrue(self.theclass.max > self.theclass.min)
+        self.assertIsInstance(cpy_date.min, expected_class)
+        self.assertIsInstance(cpy_date.max, expected_class)
+        self.assertIsInstance(cpy_date.resolution, timedelta)
+        self.assertTrue(cpy_date.max > cpy_date.min)
 
     # TODO: Needs timedelta
     @unittest.skip("Skip for CircuitPython - timedelta not implemented.")
     def test_extreme_timedelta(self):
-        big = self.theclass.max - self.theclass.min
+        big = cpy_date.max - cpy_date.min
         # 3652058 days, 23 hours, 59 minutes, 59 seconds, 999999 microseconds
         n = (big.days*24*3600 + big.seconds)*1000000 + big.microseconds
         # n == 315537897599999999 ~= 2**58.13
         justasbig = timedelta(0, 0, n)
         self.assertEqual(big, justasbig)
-        self.assertEqual(self.theclass.min + big, self.theclass.max)
-        self.assertEqual(self.theclass.max - big, self.theclass.min)
-
+        self.assertEqual(cpy_date.min + big, cpy_date.max)
+        self.assertEqual(cpy_date.max - big, cpy_date.min)
 
     def test_timetuple(self):
         for i in range(7):
@@ -257,6 +261,165 @@ class TestDate(unittest.TestCase):
             self.assertEqual(t.tm_yday, t2.tm_yday)
             self.assertEqual(t.tm_isdst, t2.tm_isdst)
 
+    def test_compare(self):
+        t1 = cpy_date(2, 3, 4)
+        t2 = cpy_date(2, 3, 4)
+        self.assertEqual(t1, t2)
+        self.assertTrue(t1 <= t2)
+        self.assertTrue(t1 >= t2)
+        self.assertTrue(not t1 != t2)
+        self.assertTrue(not t1 < t2)
+        self.assertTrue(not t1 > t2)
+
+        for args in (3, 3, 3), (2, 4, 4), (2, 3, 5):
+            t2 = cpy_date(*args)   # this is larger than t1
+            self.assertTrue(t1 < t2)
+            self.assertTrue(t2 > t1)
+            self.assertTrue(t1 <= t2)
+            self.assertTrue(t2 >= t1)
+            self.assertTrue(t1 != t2)
+            self.assertTrue(t2 != t1)
+            self.assertTrue(not t1 == t2)
+            self.assertTrue(not t2 == t1)
+            self.assertTrue(not t1 > t2)
+            self.assertTrue(not t2 < t1)
+            self.assertTrue(not t1 >= t2)
+            self.assertTrue(not t2 <= t1)
+
+        for badarg in OTHERSTUFF:
+            self.assertEqual(t1 == badarg, False)
+            self.assertEqual(t1 != badarg, True)
+            self.assertEqual(badarg == t1, False)
+            self.assertEqual(badarg != t1, True)
+
+            self.assertRaises(TypeError, lambda: t1 < badarg)
+            self.assertRaises(TypeError, lambda: t1 > badarg)
+            self.assertRaises(TypeError, lambda: t1 >= badarg)
+            self.assertRaises(TypeError, lambda: badarg <= t1)
+            self.assertRaises(TypeError, lambda: badarg < t1)
+            self.assertRaises(TypeError, lambda: badarg > t1)
+            self.assertRaises(TypeError, lambda: badarg >= t1)
+
+
+    def test_mixed_compare(self):
+        our = cpy_date(2000, 4, 5)
+        our2 = cpython_date(2000, 4, 5)
+
+        # Our class can be compared for equality to other classes
+        self.assertEqual(our == 1, our2==1)
+        self.assertEqual(1 == our, 1 == our2)
+        self.assertEqual(our != 1, our2 != 1)
+        self.assertEqual(1 != our, 1 != our2)
+
+        # But the ordering is undefined
+        self.assertRaises(TypeError, lambda: our < 1)
+        self.assertRaises(TypeError, lambda: 1 < our)
+
+        # Repeat those tests with a different class
+
+        class SomeClass:
+            pass
+
+        their = SomeClass()
+        self.assertEqual(our == their, False)
+        self.assertEqual(their == our, False)
+        self.assertEqual(our != their, True)
+        self.assertEqual(their != our, True)
+        self.assertRaises(TypeError, lambda: our < their)
+        self.assertRaises(TypeError, lambda: their < our)
+
+        # However, if the other class explicitly defines ordering
+        # relative to our class, it is allowed to do so
+
+        class LargerThanAnything:
+            def __lt__(self, other):
+                return False
+            def __le__(self, other):
+                return isinstance(other, LargerThanAnything)
+            def __eq__(self, other):
+                return isinstance(other, LargerThanAnything)
+            def __ne__(self, other):
+                return not isinstance(other, LargerThanAnything)
+            def __gt__(self, other):
+                return not isinstance(other, LargerThanAnything)
+            def __ge__(self, other):
+                return True
+
+        their = LargerThanAnything()
+        self.assertEqual(our == their, False)
+        self.assertEqual(their == our, False)
+        self.assertEqual(our != their, True)
+        self.assertEqual(their != our, True)
+        self.assertEqual(our < their, True)
+        self.assertEqual(their < our, False)
+
+    @unittest.skip("Skip for CircuitPython - min/max date attributes not implemented yet.")
+    def test_bool(self):
+        # All dates are considered true.
+        self.assertTrue(cpy_date.min)
+        self.assertTrue(cpy_date.max)
+
+    @unittest.skip("Skip for CircuitPython - date strftime not implemented yet.")
+    def test_strftime_y2k(self):
+        for y in (1, 49, 70, 99, 100, 999, 1000, 1970):
+            d = cpy_date(y, 1, 1)
+            # Issue 13305:  For years < 1000, the value is not always
+            # padded to 4 digits across platforms.  The C standard
+            # assumes year >= 1900, so it does not specify the number
+            # of digits.
+            if d.strftime("%Y") != '%04d' % y:
+                # Year 42 returns '42', not padded
+                self.assertEqual(d.strftime("%Y"), '%d' % y)
+                # '0042' is obtained anyway
+                self.assertEqual(d.strftime("%4Y"), '%04d' % y)
+
+    @unittest.skip("Skip for CircuitPython - date replace not implemented.")
+    def test_replace(self):
+        cls = cpy_date
+        args = [1, 2, 3]
+        base = cls(*args)
+        self.assertEqual(base, base.replace())
+
+        i = 0
+        for name, newval in (("year", 2),
+                             ("month", 3),
+                             ("day", 4)):
+            newargs = args[:]
+            newargs[i] = newval
+            expected = cls(*newargs)
+            got = base.replace(**{name: newval})
+            self.assertEqual(expected, got)
+            i += 1
+
+        # Out of bounds.
+        base = cls(2000, 2, 29)
+        self.assertRaises(ValueError, base.replace, year=2001)
+
+    def test_subclass_date(self):
+
+        class C(cpy_date):
+            theAnswer = 42
+
+            def __new__(cls, *args, **kws):
+                temp = kws.copy()
+                extra = temp.pop('extra')
+                result = cpy_date.__new__(cls, *args, **temp)
+                result.extra = extra
+                return result
+
+            def newmeth(self, start):
+                return start + self.year + self.month
+
+        args = 2003, 4, 14
+
+        dt1 = cpy_date(*args)
+        dt2 = C(*args, **{'extra': 7})
+
+        self.assertEqual(dt2.__class__, C)
+        self.assertEqual(dt2.theAnswer, 42)
+        self.assertEqual(dt2.extra, 7)
+        self.assertEqual(dt1.toordinal(), dt2.toordinal())
+        self.assertEqual(dt2.newmeth(-7), dt1.year + dt1.month - 7)
 
 if __name__ == '__main__':
     unittest.main()

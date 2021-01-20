@@ -281,16 +281,7 @@ class date:
         datetime object.
 
         """
-        # Use CPython expected arguments:
-        # date.replace(year=self.year, month=self.month, day=self.day)
-        if year is None:
-            year = year
-        if month is None:
-            month = month
-        if day is None:
-            day = day
-        _check_date_fields(year, month, day)
-        return date(year, month, day)
+        raise NotImplementedError()
     
     def timetuple(self):
         """Return a time.struct_time such as returned by time.localtime().
@@ -366,6 +357,10 @@ class date:
     def _getstate(self):
         yhi, ylo = divmod(self._year, 256)
         return bytes([yhi, ylo, self._month, self._day]),
+
+    def _setstate(self, string):
+        yhi, ylo, self._month, self._day = string
+        self._year = yhi * 256 + ylo
 
     def __reduce__(self):
         return (self.__class__, self._getstate())
