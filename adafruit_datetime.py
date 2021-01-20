@@ -107,10 +107,6 @@ def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_i
                              tm_hour, tm_min, tm_sec, tm_wday,
                              tm_yday, tm_isdst))
 
-def _getstate(self):
-    yhi, ylo = divmod(self._year, 256)
-    return bytes([yhi, ylo, self._month, self._day]),
-
 def _format_time(hh, mm, ss, us, timespec='auto'):
     if timespec != "auto":
         raise NotImplementedError("Only default timespec supported")
@@ -219,6 +215,7 @@ class date:
         instance._year = year
         instance._month = month
         instance._day = day
+        instance._hashcode = -1
         return instance
 
     # Instance attributes, read-only
@@ -355,6 +352,10 @@ class date:
             self._hashcode = hash(self._getstate())
         return self._hashcode
 
+    # Pickle support
+    def _getstate(self):
+        yhi, ylo = divmod(self._year, 256)
+        return bytes([yhi, ylo, self._month, self._day]),
 
 class time:
     """A time object represents a (local) time of day, independent of
