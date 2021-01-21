@@ -295,10 +295,81 @@ class TestTime(HarmlessMixedComparison, unittest.TestCase):
             self.assertEqual(orig, derived)
 
     def test_bool(self):
+        # time is always True.
         cls = self.theclass
         self.assertTrue(cls(1))
         self.assertTrue(cls(0, 1))
         self.assertTrue(cls(0, 0, 1))
         self.assertTrue(cls(0, 0, 0, 1))
-        self.assertTrue(not cls(0))
-        self.assertTrue(not cls())
+        self.assertTrue(cls(0))
+        self.assertTrue(cls())
+
+    @unittest.skip("Skip for CircuitPython  - replace() not implemented")
+    def test_replace(self):
+        cls = self.theclass
+        args = [1, 2, 3, 4]
+        base = cls(*args)
+        self.assertEqual(base, base.replace())
+
+        i = 0
+        for name, newval in (("hour", 5),
+                             ("minute", 6),
+                             ("second", 7),
+                             ("microsecond", 8)):
+            newargs = args[:]
+            newargs[i] = newval
+            expected = cls(*newargs)
+            got = base.replace(**{name: newval})
+            self.assertEqual(expected, got)
+            i += 1
+
+        # Out of bounds.
+        base = cls(1)
+        self.assertRaises(ValueError, base.replace, hour=24)
+        self.assertRaises(ValueError, base.replace, minute=-1)
+        self.assertRaises(ValueError, base.replace, second=100)
+        self.assertRaises(ValueError, base.replace, microsecond=1000000)
+
+    @unittest.skip("Skip for CircuitPython  - replace() not implemented")
+    def test_subclass_replace(self):
+        class TimeSubclass(self.theclass):
+            pass
+
+        ctime = TimeSubclass(12, 30)
+        self.assertIs(type(ctime.replace(hour=10)), TimeSubclass)
+
+    def test_subclass_time(self):
+
+        class C(self.theclass):
+            theAnswer = 42
+
+            def __new__(cls, *args, **kws):
+                temp = kws.copy()
+                extra = temp.pop('extra')
+                result = self.theclass.__new__(cls, *args, **temp)
+                result.extra = extra
+                return result
+
+            def newmeth(self, start):
+                return start + self.hour + self.second
+
+        args = 4, 5, 6
+
+        dt1 = self.theclass(*args)
+        dt2 = C(*args, **{'extra': 7})
+
+        self.assertEqual(dt2.__class__, C)
+        self.assertEqual(dt2.theAnswer, 42)
+        self.assertEqual(dt2.extra, 7)
+        self.assertEqual(dt1.isoformat(), dt2.isoformat())
+        self.assertEqual(dt2.newmeth(-7), dt1.hour + dt1.second - 7)
+
+    def test_backdoor_resistance(self):
+        # see TestDate.test_backdoor_resistance().
+        base = '2:59.0'
+        for hour_byte in ' ', '9', chr(24), '\xff':
+            self.assertRaises(TypeError, self.theclass,
+                                         hour_byte + base[1:])
+        # Good bytes, but bad tzinfo:
+        with self.assertRaises(TypeError):
+            self.theclass(bytes([1] * len(base)), 'EST')
