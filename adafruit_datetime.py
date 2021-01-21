@@ -31,7 +31,6 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
 
 # Utility functions
 
-
 # The datetime module exports the following constants:
 MINYEAR = const(1)
 MAXYEAR = const(9999)
@@ -686,6 +685,29 @@ class time:
         return _cmp((myhhmm, self._second, self._microsecond),
                     (othhmm, other._second, other._microsecond))
 
+    # from CPython
+    # https://github.com/python/cpython/blob/master/Lib/datetime.py
+    def __hash__(self):
+        """Hash."""
+        if self._hashcode == -1:
+            if self.fold:
+                t = self.replace(fold=0)
+            else:
+                t = self
+            tzoff = t.utcoffset()
+            if not tzoff:  # zero or None
+                self._hashcode = hash(t._getstate()[0])
+            else:
+                h, m = divmod(timedelta(hours=self.hour, minutes=self.minute) - tzoff,
+                              timedelta(hours=1))
+                assert not m % timedelta(minutes=1), "whole minute"
+                m //= timedelta(minutes=1)
+                if 0 <= h < 24:
+                    self._hashcode = hash(time(h, m, self.second, self.microsecond))
+                else:
+                    self._hashcode = hash((h, m, self.second, self.microsecond))
+        return self._hashcode
+
     # Instance methods
     def replace():
         raise NotImplementedError
@@ -738,6 +760,24 @@ class time:
                      0, 1, -1)
         return _wrap_strftime(self, fmt, timetuple)
 
+    def __repr__(self):
+        """Convert to formal string, for repr()."""
+        if self._microsecond != 0:
+            s = ", %d, %d" % (self._second, self._microsecond)
+        elif self._second != 0:
+            s = ", %d" % self._second
+        else:
+            s = ""
+        s= "%s.%s(%d, %d%s)" % (self.__class__.__module__,
+                                self.__class__.__qualname__,
+                                self._hour, self._minute, s)
+        if self._tzinfo is not None:
+            assert s[-1:] == ")"
+            s = s[:-1] + ", tzinfo=%r" % self._tzinfo + ")"
+        if self._fold:
+            assert s[-1:] == ")"
+            s = s[:-1] + ", fold=1)"
+        return s
 
     # Timezone functions
     def utcoffset(self):
@@ -754,3 +794,17 @@ class time:
 
     def dst():
         raise NotImplementedError()
+
+    # Pickle support
+    def _getstate(self, protocol=3):
+        us2, us3 = divmod(self._microsecond, 256)
+        us1, us2 = divmod(us2, 256)
+        h = self._hour
+        if self._fold and protocol > 3:
+            h += 128
+        basestate = bytes([h, self._minute, self._second,
+                           us1, us2, us3])
+        if self._tzinfo is None:
+            return (basestate,)
+        else:
+            return (basestate, self._tzinfo)

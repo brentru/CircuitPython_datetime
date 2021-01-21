@@ -420,6 +420,3 @@ class TestDate(unittest.TestCase):
         self.assertEqual(dt2.extra, 7)
         self.assertEqual(dt1.toordinal(), dt2.toordinal())
         self.assertEqual(dt2.newmeth(-7), dt1.year + dt1.month - 7)
-
-if __name__ == '__main__':
-    unittest.main()
