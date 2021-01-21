@@ -49,7 +49,7 @@ _DI4Y   = const(1461)
 def _cmp(x, y):
     return 0 if x == y else 1 if x > y else -1
 
-# time 
+# time
 def _check_time_fields(hour, minute, second, microsecond, fold):
     if not isinstance(hour, int):
         raise TypeError('Hour expected as int')
@@ -85,12 +85,13 @@ def _check_utc_offset(name, offset):
                          " -timedelta(hours=24) and timedelta(hours=24)"
                          % (name, offset))
 
+
 # Correctly substitute for %z and %Z escapes in strftime formats.
 def _wrap_strftime(object, format, timetuple):
     # Don't call utcoffset() or tzname() unless actually needed.
-    freplace = None # the string to use for %f
-    zreplace = None # the string to use for %z
-    Zreplace = None # the string to use for %Z
+    freplace = None  # the string to use for %f
+    zreplace = None  # the string to use for %z
+    Zreplace = None  # the string to use for %Z
 
     # Scan format for %z and %Z escapes, replacing as needed.
     newformat = []
@@ -118,10 +119,16 @@ def _wrap_strftime(object, format, timetuple):
                                 if offset.days < 0:
                                     offset = -offset
                                     sign = '-'
-                                h, m = divmod(offset, timedelta(hours=1))
-                                assert not m % timedelta(minutes=1), "whole minute"
-                                m //= timedelta(minutes=1)
-                                zreplace = '%c%02d%02d' % (sign, h, m)
+                                h, rest = divmod(offset, timedelta(hours=1))
+                                m, rest = divmod(rest, timedelta(minutes=1))
+                                s = rest.seconds
+                                u = offset.microseconds
+                                if u:
+                                    zreplace = '%c%02d%02d%02d.%06d' % (sign, h, m, s, u)
+                                elif s:
+                                    zreplace = '%c%02d%02d%02d' % (sign, h, m, s)
+                                else:
+                                    zreplace = '%c%02d%02d' % (sign, h, m)
                     assert '%' not in zreplace
                     newformat.append(zreplace)
                 elif ch == 'Z':
@@ -142,6 +149,13 @@ def _wrap_strftime(object, format, timetuple):
             push(ch)
     newformat = "".join(newformat)
     return _time.strftime(newformat, timetuple)
+
+# timezone
+# Just raise TypeError if the arg isn't None or a string.
+def _check_tzname(name):
+    if name is not None and not isinstance(name, str):
+        raise TypeError("tzinfo.tzname() must return None or string, "
+                        "not '%s'" % type(name))
 
 # date
 def _is_leap(year):
@@ -588,6 +602,7 @@ class time:
         self._microsecond = microsecond
         self._tzinfo = tzinfo
         self._fold = fold
+        self._hashcode = -1
         return self
 
     # Instance attributes (read-only)
@@ -760,6 +775,15 @@ class time:
                      0, 1, -1)
         return _wrap_strftime(self, fmt, timetuple)
 
+    # from CPython
+    # https://github.com/python/cpython/blob/master/Lib/datetime.py
+    def __format__(self, fmt):
+        if not isinstance(fmt, str):
+            raise TypeError("must be str, not %s" % type(fmt).__name__)
+        if len(fmt) != 0:
+            return self.strftime(fmt)
+        return str(self)
+
     def __repr__(self):
         """Convert to formal string, for repr()."""
         if self._microsecond != 0:
@@ -789,8 +813,18 @@ class time:
         _check_utc_offset("utcoffset", offset)
         return offset
     
-    def tzname():
-        raise NotImplementedError()
+    def tzname(self):
+        """Return the timezone name.
+
+        Note that the name is 100% informational -- there's no requirement that
+        it mean anything in particular. For example, "GMT", "UTC", "-500",
+        "-5:00", "EDT", "US/Eastern", "America/New York" are all valid replies.
+        """
+        if self._tzinfo is None:
+            return None
+        name = self._tzinfo.tzname(None)
+        _check_tzname(name)
+        return name
 
     def dst():
         raise NotImplementedError()

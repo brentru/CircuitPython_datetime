@@ -1,9 +1,9 @@
-import sys
 import unittest
 import time
 # CPython standard implementation
 from datetime import time as cpython_time
 # CircuitPython subset implementation
+import sys
 sys.path.append("..")
 from adafruit_datetime import time as cpy_time
 
@@ -86,7 +86,6 @@ class TestTime(HarmlessMixedComparison, unittest.TestCase):
         args = [1, 2, 3, 4]
         t1 = self.theclass(*args)
         t2 = self.theclass(*args)
-        print(t1, t2)
         self.assertEqual(t1, t2)
         self.assertTrue(t1 <= t2)
         self.assertTrue(t1 >= t2)
@@ -125,3 +124,181 @@ class TestTime(HarmlessMixedComparison, unittest.TestCase):
             self.assertRaises(TypeError, lambda: badarg < t1)
             self.assertRaises(TypeError, lambda: badarg > t1)
             self.assertRaises(TypeError, lambda: badarg >= t1)
+
+
+    def test_bad_constructor_arguments(self):
+        # bad hours
+        self.theclass(0, 0)    # no exception
+        self.theclass(23, 0)   # no exception
+        self.assertRaises(ValueError, self.theclass, -1, 0)
+        self.assertRaises(ValueError, self.theclass, 24, 0)
+        # bad minutes
+        self.theclass(23, 0)    # no exception
+        self.theclass(23, 59)   # no exception
+        self.assertRaises(ValueError, self.theclass, 23, -1)
+        self.assertRaises(ValueError, self.theclass, 23, 60)
+        # bad seconds
+        self.theclass(23, 59, 0)    # no exception
+        self.theclass(23, 59, 59)   # no exception
+        self.assertRaises(ValueError, self.theclass, 23, 59, -1)
+        self.assertRaises(ValueError, self.theclass, 23, 59, 60)
+        # bad microseconds
+        self.theclass(23, 59, 59, 0)        # no exception
+        self.theclass(23, 59, 59, 999999)   # no exception
+        self.assertRaises(ValueError, self.theclass, 23, 59, 59, -1)
+        self.assertRaises(ValueError, self.theclass, 23, 59, 59, 1000000)
+
+    def test_hash_equality(self):
+        d = self.theclass(23, 30, 17)
+        e = self.theclass(23, 30, 17)
+        self.assertEqual(d, e)
+        self.assertEqual(hash(d), hash(e))
+
+        dic = {d: 1}
+        dic[e] = 2
+        self.assertEqual(len(dic), 1)
+        self.assertEqual(dic[d], 2)
+        self.assertEqual(dic[e], 2)
+
+        d = self.theclass(0,  5, 17)
+        e = self.theclass(0,  5, 17)
+        self.assertEqual(d, e)
+        self.assertEqual(hash(d), hash(e))
+
+        dic = {d: 1}
+        dic[e] = 2
+        self.assertEqual(len(dic), 1)
+        self.assertEqual(dic[d], 2)
+        self.assertEqual(dic[e], 2)
+
+    def test_isoformat(self):
+        t = self.theclass(4, 5, 1, 123)
+        self.assertEqual(t.isoformat(), "04:05:01.000123")
+        self.assertEqual(t.isoformat(), str(t))
+
+        t = self.theclass()
+        self.assertEqual(t.isoformat(), "00:00:00")
+        self.assertEqual(t.isoformat(), str(t))
+
+        t = self.theclass(microsecond=1)
+        self.assertEqual(t.isoformat(), "00:00:00.000001")
+        self.assertEqual(t.isoformat(), str(t))
+
+        t = self.theclass(microsecond=10)
+        self.assertEqual(t.isoformat(), "00:00:00.000010")
+        self.assertEqual(t.isoformat(), str(t))
+
+        t = self.theclass(microsecond=100)
+        self.assertEqual(t.isoformat(), "00:00:00.000100")
+        self.assertEqual(t.isoformat(), str(t))
+
+        t = self.theclass(microsecond=1000)
+        self.assertEqual(t.isoformat(), "00:00:00.001000")
+        self.assertEqual(t.isoformat(), str(t))
+
+        t = self.theclass(microsecond=10000)
+        self.assertEqual(t.isoformat(), "00:00:00.010000")
+        self.assertEqual(t.isoformat(), str(t))
+
+        t = self.theclass(microsecond=100000)
+        self.assertEqual(t.isoformat(), "00:00:00.100000")
+        self.assertEqual(t.isoformat(), str(t))
+
+
+    def test_1653736(self):
+        # verify it doesn't accept extra keyword arguments
+        t = self.theclass(second=1)
+        self.assertRaises(TypeError, t.isoformat, foo=3)
+
+    def test_strftime(self):
+        t = self.theclass(1, 2, 3, 4)
+        self.assertEqual(t.strftime('%H %M %S %f'), "01 02 03 000004")
+        # A naive object replaces %z and %Z with empty strings.
+        self.assertEqual(t.strftime("'%z' '%Z'"), "'' ''")
+        # bpo-34482: Check that surrogates don't cause a crash.
+        try:
+            t.strftime('%H\ud800%M')
+        except UnicodeEncodeError:
+            pass
+
+    def test_format(self):
+        t = self.theclass(1, 2, 3, 4)
+        self.assertEqual(t.__format__(''), str(t))
+
+        with self.assertRaisesRegex(TypeError, 'must be str, not int'):
+            t.__format__(123)
+
+        # check that a derived class's __str__() gets called
+        class A(self.theclass):
+            def __str__(self):
+                return 'A'
+        a = A(1, 2, 3, 4)
+        self.assertEqual(a.__format__(''), 'A')
+
+        # check that a derived class's strftime gets called
+        class B(self.theclass):
+            def strftime(self, format_spec):
+                return 'B'
+        b = B(1, 2, 3, 4)
+        self.assertEqual(b.__format__(''), str(t))
+
+        for fmt in ['%H %M %S',
+                    ]:
+            self.assertEqual(t.__format__(fmt), t.strftime(fmt))
+            self.assertEqual(a.__format__(fmt), t.strftime(fmt))
+            self.assertEqual(b.__format__(fmt), 'B')
+
+    def test_str(self):
+        self.assertEqual(str(self.theclass(1, 2, 3, 4)), "01:02:03.000004")
+        self.assertEqual(str(self.theclass(10, 2, 3, 4000)), "10:02:03.004000")
+        self.assertEqual(str(self.theclass(0, 2, 3, 400000)), "00:02:03.400000")
+        self.assertEqual(str(self.theclass(12, 2, 3, 0)), "12:02:03")
+        self.assertEqual(str(self.theclass(23, 15, 0, 0)), "23:15:00")
+
+    # modified for adafruit_datetime
+    def test_repr(self):
+        name = 'adafruit_datetime.' + self.theclass.__name__
+        self.assertEqual(repr(self.theclass(1, 2, 3, 4)),
+                         "%s(1, 2, 3, 4)" % name)
+        self.assertEqual(repr(self.theclass(10, 2, 3, 4000)),
+                         "%s(10, 2, 3, 4000)" % name)
+        self.assertEqual(repr(self.theclass(0, 2, 3, 400000)),
+                         "%s(0, 2, 3, 400000)" % name)
+        self.assertEqual(repr(self.theclass(12, 2, 3, 0)),
+                         "%s(12, 2, 3)" % name)
+        self.assertEqual(repr(self.theclass(23, 15, 0, 0)),
+                         "%s(23, 15)" % name)
+
+    @unittest.skip("Skip for CircuitPython  - not implemented")
+    def test_resolution_info(self):
+        self.assertIsInstance(self.theclass.min, self.theclass)
+        self.assertIsInstance(self.theclass.max, self.theclass)
+        self.assertIsInstance(self.theclass.resolution, timedelta)
+        self.assertTrue(self.theclass.max > self.theclass.min)
+
+    @unittest.skip("Skip for CircuitPython  - not implemented")
+    def test_pickling(self):
+        args = 20, 59, 16, 64**2
+        orig = self.theclass(*args)
+        for pickler, unpickler, proto in pickle_choices:
+            green = pickler.dumps(orig, proto)
+            derived = unpickler.loads(green)
+            self.assertEqual(orig, derived)
+
+    @unittest.skip("Skip for CircuitPython  - not implemented")
+    def test_pickling_subclass_time(self):
+        args = 20, 59, 16, 64**2
+        orig = SubclassTime(*args)
+        for pickler, unpickler, proto in pickle_choices:
+            green = pickler.dumps(orig, proto)
+            derived = unpickler.loads(green)
+            self.assertEqual(orig, derived)
+
+    def test_bool(self):
+        cls = self.theclass
+        self.assertTrue(cls(1))
+        self.assertTrue(cls(0, 1))
+        self.assertTrue(cls(0, 0, 1))
+        self.assertTrue(cls(0, 0, 0, 1))
+        self.assertTrue(not cls(0))
+        self.assertTrue(not cls())
