@@ -34,6 +34,7 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
 # The datetime module exports the following constants:
 MINYEAR = const(1)
 MAXYEAR = const(9999)
+_MAXORDINAL = const(3652059)
 
 # https://svn.python.org/projects/sandbox/trunk/datetime/datetime.py
 # TODO: make this a tuple
@@ -48,6 +49,10 @@ _DI4Y   = const(1461)
 # universally shared
 def _cmp(x, y):
     return 0 if x == y else 1 if x > y else -1
+
+def _cmperror(x, y):
+    raise TypeError("can't compare '%s' to '%s'" % (
+                    type(x).__name__, type(y).__name__))
 
 # time
 def _check_time_fields(hour, minute, second, microsecond, fold):
@@ -1028,18 +1033,29 @@ class datetime(date):
         # TODO
         pass
 
-    #timetuple
+    def timetuple(self):
+        """Return local time tuple compatible with time.localtime()."""
+        # TODO: Requires tzinfo and dst()
+        raise NotImplementedError
+        dst = self.dst()
+        if dst is None:
+            dst = -1
+        elif dst:
+            dst = 1
+        else:
+            dst = 0
+        return _build_struct_time(self.year, self.month, self.day,
+                                  self.hour, self.minute, self.second,
+                                  dst)
 
     def astimezone(self):
         raise NotImplementedError()
-
 
     def utcoffset(self):
         raise NotImplementedError()
 
     def dst(self):
         raise NotImplementedError()
-
 
     def tzname(self):
         raise NotImplementedError()
@@ -1051,7 +1067,6 @@ class datetime(date):
         """Return the proleptic Gregorian ordinal of the date."""
         return _date_class.toordinal()
 
-    #timestamp
     def timestamp(self):
         "Return POSIX timestamp as float"
         if self._tzinfo is None:
@@ -1060,13 +1075,155 @@ class datetime(date):
         else:
             return (self - _EPOCH).total_seconds()
 
-    #weekday
+    def weekday(self):
+        """Return the day of the week as an integer, where Monday is 0 and Sunday is 6."""
+        return (self.toordinal() + 6) % 7
 
+    def isoweekday(self):
+        """Return the day of the week as an integer, where Monday is 1 and Sunday is 7. """
+        return self.toordinal() % 7 or 7
 
-    #isoweekday
+    def isocalendar(self):
+        raise NotImplementedError()
 
-    #isocalendar
-    # dontimpl, or impl and call from date
+    # Comparisons of datetime objects.
+    def __eq__(self, other):
+        if isinstance(other, datetime):
+            return self._cmp(other, allow_mixed=True) == 0
+        elif not isinstance(other, date):
+            return NotImplemented
+        else:
+            return False
+
+    def __le__(self, other):
+        if isinstance(other, datetime):
+            return self._cmp(other) <= 0
+        elif not isinstance(other, date):
+            return NotImplemented
+        else:
+            _cmperror(self, other)
+
+    def __lt__(self, other):
+        if isinstance(other, datetime):
+            return self._cmp(other) < 0
+        elif not isinstance(other, date):
+            return NotImplemented
+        else:
+            _cmperror(self, other)
+
+    def __ge__(self, other):
+        if isinstance(other, datetime):
+            return self._cmp(other) >= 0
+        elif not isinstance(other, date):
+            return NotImplemented
+        else:
+            _cmperror(self, other)
+
+    def __gt__(self, other):
+        if isinstance(other, datetime):
+            return self._cmp(other) > 0
+        elif not isinstance(other, date):
+            return NotImplemented
+        else:
+            _cmperror(self, other)
+
+    def _cmp(self, other, allow_mixed=False):
+        assert isinstance(other, datetime)
+        mytz = self._tzinfo
+        ottz = other._tzinfo
+        myoff = otoff = None
+
+        if mytz is ottz:
+            base_compare = True
+        else:
+            myoff = self.utcoffset()
+            otoff = other.utcoffset()
+            # Assume that allow_mixed means that we are called from __eq__
+            if allow_mixed:
+                if myoff != self.replace(fold=not self.fold).utcoffset():
+                    return 2
+                if otoff != other.replace(fold=not other.fold).utcoffset():
+                    return 2
+            base_compare = myoff == otoff
+
+        if base_compare:
+            return _cmp((self._year, self._month, self._day,
+                         self._hour, self._minute, self._second,
+                         self._microsecond),
+                        (other._year, other._month, other._day,
+                         other._hour, other._minute, other._second,
+                         other._microsecond))
+        if myoff is None or otoff is None:
+            if allow_mixed:
+                return 2 # arbitrary non-zero value
+            else:
+                raise TypeError("cannot compare naive and aware datetimes")
+        # XXX What follows could be done more efficiently...
+        diff = self - other     # this will take offsets into account
+        if diff.days < 0:
+            return -1
+        return diff and 1 or 0
+
+    def __add__(self, other):
+        "Add a datetime and a timedelta."
+        if not isinstance(other, timedelta):
+            return NotImplemented
+        delta = timedelta(self.toordinal(),
+                          hours=self._hour,
+                          minutes=self._minute,
+                          seconds=self._second,
+                          microseconds=self._microsecond)
+        delta += other
+        hour, rem = divmod(delta.seconds, 3600)
+        minute, second = divmod(rem, 60)
+        if 0 < delta.days <= _MAXORDINAL:
+            return type(self).combine(date.fromordinal(delta.days),
+                                      time(hour, minute, second,
+                                           delta.microseconds,
+                                           tzinfo=self._tzinfo))
+        raise OverflowError("result out of range")
+
+    __radd__ = __add__
+
+    def __sub__(self, other):
+        "Subtract two datetimes, or a datetime and a timedelta."
+        if not isinstance(other, datetime):
+            if isinstance(other, timedelta):
+                return self + -other
+            return NotImplemented
+
+        days1 = self.toordinal()
+        days2 = other.toordinal()
+        secs1 = self._second + self._minute * 60 + self._hour * 3600
+        secs2 = other._second + other._minute * 60 + other._hour * 3600
+        base = timedelta(days1 - days2,
+                         secs1 - secs2,
+                         self._microsecond - other._microsecond)
+        if self._tzinfo is other._tzinfo:
+            return base
+        myoff = self.utcoffset()
+        otoff = other.utcoffset()
+        if myoff == otoff:
+            return base
+        if myoff is None or otoff is None:
+            raise TypeError("cannot mix naive and timezone-aware time")
+        return base + otoff - myoff
+
+    def __hash__(self):
+        if self._hashcode == -1:
+            if self.fold:
+                t = self.replace(fold=0)
+            else:
+                t = self
+            tzoff = t.utcoffset()
+            if tzoff is None:
+                self._hashcode = hash(t._getstate()[0])
+            else:
+                days = _ymd2ord(self.year, self.month, self.day)
+                seconds = self.hour * 3600 + self.minute * 60 + self.second
+                self._hashcode = hash(timedelta(days, seconds, self.microsecond) - tzoff)
+        return self._hashcode
+
 
 # TODO: switch below once we have tzinfo
 #_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
