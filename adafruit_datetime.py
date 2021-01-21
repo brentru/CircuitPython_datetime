@@ -459,6 +459,8 @@ class date:
 
     def __reduce__(self):
         return (self.__class__, self._getstate())
+    
+_date_class = date
 
 
 class timedelta:
@@ -596,6 +598,7 @@ class time:
         # TODO: Impl. tzinfo checks
         # _check_tzinfo_arg(tzinfo)
         self = object.__new__(cls)
+        self.hour = hour
         self._hour = hour
         self._minute = minute
         self._second = second
@@ -631,14 +634,9 @@ class time:
     def tzinfo(self):
         """The object passed as the tzinfo argument to
         the time constructor, or None if none was passed.
-
         """
         return self._microsecond
 
-    @property
-    def fold(self):
-        """In [0, 1]. Used to disambiguate wall times during a repeated interval."""
-        return self._fold
 
     # Standard conversions and comparisons
     # From CPython, https://github.com/python/cpython/blob/master/Lib/datetime.py
@@ -842,3 +840,95 @@ class time:
             return (basestate,)
         else:
             return (basestate, self._tzinfo)
+
+# todo: move to bottom?
+_time_class = time  # so functions w/ args named "time" can get at the class
+
+
+class datetime(date):
+    """A datetime object is a single object containing all the information from a date object and a time object.
+    Like a date object, datetime assumes the current Gregorian calendar extended in both directions; like a time object, datetime assumes there are exactly 3600*24 seconds in every day.
+
+    """
+    __slots__ = date.__slots__ + time.__slots__
+    def __new__(cls, year, month, day, hour=0, minute=0, second=0, microsecond=0,
+                tzinfo=None, *, fold=0):
+        # check date and time fields
+        _check_date_fields(year, month, day)
+        _check_time_fields(hour, minute, second, microsecond, fold)
+        # TODO: TZINFO support
+        # _check_tzinfo_arg(tzinfo)
+        self = date.__new__(cls)
+        self._year = year
+        self._month = month
+        self._day = day
+        self._hour = hour
+        self._minute = minute
+        self._microsecond = microsecond
+        self._tzinfo = tzinfo
+        self._fold = fold
+        self._hashcode = -1
+        return self
+    
+    # Read-only instance attributes
+    @property
+    def year(self):
+        """Between MINYEAR and MAXYEAR inclusive."""
+        return self._year
+
+    @property
+    def month(self):
+        """Between 1 and 12 inclusive."""
+        return self._month
+    
+    @property
+    def day(self):
+        """Between 1 and the number of days in the given month of the given year."""
+        return self._day
+    
+    @property
+    def hour(self):
+        """In range(24)."""
+        return self._hour   
+
+    @property
+    def minute(self):
+        """In range (60)"""
+        return self._minute
+
+    @property
+    def second(self):
+        """In range (60)"""
+        return self._second
+
+    @property
+    def microsecond(self):
+        """In range (1000000)"""
+        return self._microsecond
+
+    @property
+    def tzinfo(self):
+        """The object passed as the tzinfo argument to the datetime constructor,
+        or None if none was passed.
+        """
+        return self._tzinfo
+
+
+    # Class methods
+
+    # today
+
+    # now
+
+    # fromtimestamp
+
+    # not sure if we want..
+    # #utcnow
+    #utcfromtimestamp
+
+    # fromordinal
+
+    # fromisoformat
+
+    # fromisocal
+    # dont want
