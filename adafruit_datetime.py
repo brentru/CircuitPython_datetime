@@ -156,8 +156,8 @@ def _wrap_strftime(object, format, timetuple):
     return _time.strftime(newformat, timetuple)
 
 # timezone
-# Just raise TypeError if the arg isn't None or a string.
 def _check_tzname(name):
+    """"Just raise TypeError if the arg isn't None or a string."""
     if name is not None and not isinstance(name, str):
         raise TypeError("tzinfo.tzname() must return None or string, "
                         "not '%s'" % type(name))
@@ -312,6 +312,144 @@ def _ord2ymd(n):
     # Now the year and month are correct, and n is the offset from the
     # start of that month:  we're done!
     return year, month, n+1
+
+
+class timedelta:
+    """A timedelta object represents a duration, the difference between two dates or times.
+
+    Only days, seconds and microseconds are stored internally. Arguments are converted to those units:
+        * A millisecond is converted to 1000 microseconds.
+        * A minute is converted to 60 seconds.
+        * An hour is converted to 3600 seconds.
+        * A week is converted to 7 days.
+    and days, seconds and microseconds are then normalized so that the representation is unique, with
+        * 0 <= microseconds < 1000000
+        * 0 <= seconds < 3600*24 (the number of seconds in one day)
+        * -999999999 <= days <= 999999999
+
+    """
+
+    __slots__ = '_days', '_seconds', '_microseconds', '_hashcode'
+    def __new__(cls, days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0, hours=0, weeks=0):
+
+        # Doing this efficiently and accurately in C is going to be difficult
+        # and error-prone, due to ubiquitous overflow possibilities, and that
+        # C double doesn't have enough bits of precision to represent
+        # microseconds over 10K years faithfully.  The code here tries to make
+        # explicit where go-fast assumptions can be relied on, in order to
+        # guide the C implementation; it's way more convoluted than speed-
+        # ignoring auto-overflow-to-long idiomatic Python could be.
+
+        # Check that all inputs are ints or floats.
+        if not all(isinstance(i, (int, float)) for i in [days, seconds, microseconds, milliseconds, minutes, hours, weeks]):
+            raise TypeError("Kwargs to this function must be int or float.")
+
+        # Final values, all integer.
+        # s and us fit in 32-bit signed ints; d isn't bounded.
+        d = s = us = 0
+
+        # Normalize everything to days, seconds, microseconds.
+        days += weeks*7
+        seconds += minutes*60 + hours*3600
+        microseconds += milliseconds*1000
+
+        # Get rid of all fractions, and normalize s and us.
+        # Take a deep breath <wink>.
+        if isinstance(days, float):
+            dayfrac, days = _math.modf(days)
+            daysecondsfrac, daysecondswhole = _math.modf(dayfrac * (24.*3600.))
+            assert daysecondswhole == int(daysecondswhole)  # can't overflow
+            s = int(daysecondswhole)
+            assert days == int(days)
+            d = int(days)
+        else:
+            daysecondsfrac = 0.0
+            d = days
+        assert isinstance(daysecondsfrac, float)
+        assert abs(daysecondsfrac) <= 1.0
+        assert isinstance(d, int)
+        assert abs(s) <= 24 * 3600
+        # days isn't referenced again before redefinition
+
+        if isinstance(seconds, float):
+            secondsfrac, seconds = _math.modf(seconds)
+            assert seconds == int(seconds)
+            seconds = int(seconds)
+            secondsfrac += daysecondsfrac
+            assert abs(secondsfrac) <= 2.0
+        else:
+            secondsfrac = daysecondsfrac
+        # daysecondsfrac isn't referenced again
+        assert isinstance(secondsfrac, float)
+        assert abs(secondsfrac) <= 2.0
+
+        assert isinstance(seconds, int)
+        days, seconds = divmod(seconds, 24*3600)
+        d += days
+        s += int(seconds)    # can't overflow
+        assert isinstance(s, int)
+        assert abs(s) <= 2 * 24 * 3600
+        # seconds isn't referenced again before redefinition
+
+        usdouble = secondsfrac * 1e6
+        assert abs(usdouble) < 2.1e6    # exact value not critical
+        # secondsfrac isn't referenced again
+
+        if isinstance(microseconds, float):
+            microseconds = round(microseconds + usdouble)
+            seconds, microseconds = divmod(microseconds, 1000000)
+            days, seconds = divmod(seconds, 24*3600)
+            d += days
+            s += seconds
+        else:
+            microseconds = int(microseconds)
+            seconds, microseconds = divmod(microseconds, 1000000)
+            days, seconds = divmod(seconds, 24*3600)
+            d += days
+            s += seconds
+            microseconds = round(microseconds + usdouble)
+        assert isinstance(s, int)
+        assert isinstance(microseconds, int)
+        assert abs(s) <= 3 * 24 * 3600
+        assert abs(microseconds) < 3.1e6
+
+        # Just a little bit of carrying possible for microseconds and seconds.
+        seconds, us = divmod(microseconds, 1000000)
+        s += seconds
+        days, s = divmod(s, 24*3600)
+        d += days
+
+        assert isinstance(d, int)
+        assert isinstance(s, int) and 0 <= s < 24*3600
+        assert isinstance(us, int) and 0 <= us < 1000000
+
+        if abs(d) > 999999999:
+            raise OverflowError("timedelta # of days is too large: %d" % d)
+
+        self = object.__new__(cls)
+        self._days = d
+        self._seconds = s
+        self._microseconds = us
+        self._hashcode = -1
+        return self
+    
+    ## TODO: Implement __repr__
+
+class tzinfo:
+    """This is an abstract base class, meaning that this class should not
+    be instantiated directly. Define a subclass of tzinfo to capture information
+    about a particular time zone.
+    An instance of (a concrete subclass of) tzinfo can be passed to the constructors for datetime and time objects. The latter objects view their attributes as being in local time, and the tzinfo object supports methods revealing offset of local time from UTC, the name of the time zone, and DST offset, all relative to a date or time object passed to them.
+
+    """
+    __slots__ = ()
+    def utcoffset(self, dt):
+        """Return offset of local time from UTC, as a timedelta object that is positive east of UTC. """
+        raise NotImplementedError("tzinfo subclass must override utcoffset()")
+
+    def tzname(self, dt):
+        """Return the time zone name corresponding to the datetime object dt, as a string."""
+        raise NotImplemented("tzinfo subclass must override tzname()")
 
 
 class date:
@@ -483,128 +621,6 @@ class date:
         return (self.__class__, self._getstate())
     
 _date_class = date
-
-
-class timedelta:
-    """A timedelta object represents a duration, the difference between two dates or times.
-
-    Only days, seconds and microseconds are stored internally. Arguments are converted to those units:
-        * A millisecond is converted to 1000 microseconds.
-        * A minute is converted to 60 seconds.
-        * An hour is converted to 3600 seconds.
-        * A week is converted to 7 days.
-    and days, seconds and microseconds are then normalized so that the representation is unique, with
-        * 0 <= microseconds < 1000000
-        * 0 <= seconds < 3600*24 (the number of seconds in one day)
-        * -999999999 <= days <= 999999999
-
-    """
-
-    __slots__ = '_days', '_seconds', '_microseconds', '_hashcode'
-    def __new__(cls, days=0, seconds=0, microseconds=0, milliseconds=0, minutes=0, hours=0, weeks=0):
-
-        # Doing this efficiently and accurately in C is going to be difficult
-        # and error-prone, due to ubiquitous overflow possibilities, and that
-        # C double doesn't have enough bits of precision to represent
-        # microseconds over 10K years faithfully.  The code here tries to make
-        # explicit where go-fast assumptions can be relied on, in order to
-        # guide the C implementation; it's way more convoluted than speed-
-        # ignoring auto-overflow-to-long idiomatic Python could be.
-
-        # Check that all inputs are ints or floats.
-        if not all(isinstance(i, (int, float)) for i in [days, seconds, microseconds, milliseconds, minutes, hours, weeks]):
-            raise TypeError("Kwargs to this function must be int or float.")
-
-        # Final values, all integer.
-        # s and us fit in 32-bit signed ints; d isn't bounded.
-        d = s = us = 0
-
-        # Normalize everything to days, seconds, microseconds.
-        days += weeks*7
-        seconds += minutes*60 + hours*3600
-        microseconds += milliseconds*1000
-
-        # Get rid of all fractions, and normalize s and us.
-        # Take a deep breath <wink>.
-        if isinstance(days, float):
-            dayfrac, days = _math.modf(days)
-            daysecondsfrac, daysecondswhole = _math.modf(dayfrac * (24.*3600.))
-            assert daysecondswhole == int(daysecondswhole)  # can't overflow
-            s = int(daysecondswhole)
-            assert days == int(days)
-            d = int(days)
-        else:
-            daysecondsfrac = 0.0
-            d = days
-        assert isinstance(daysecondsfrac, float)
-        assert abs(daysecondsfrac) <= 1.0
-        assert isinstance(d, int)
-        assert abs(s) <= 24 * 3600
-        # days isn't referenced again before redefinition
-
-        if isinstance(seconds, float):
-            secondsfrac, seconds = _math.modf(seconds)
-            assert seconds == int(seconds)
-            seconds = int(seconds)
-            secondsfrac += daysecondsfrac
-            assert abs(secondsfrac) <= 2.0
-        else:
-            secondsfrac = daysecondsfrac
-        # daysecondsfrac isn't referenced again
-        assert isinstance(secondsfrac, float)
-        assert abs(secondsfrac) <= 2.0
-
-        assert isinstance(seconds, int)
-        days, seconds = divmod(seconds, 24*3600)
-        d += days
-        s += int(seconds)    # can't overflow
-        assert isinstance(s, int)
-        assert abs(s) <= 2 * 24 * 3600
-        # seconds isn't referenced again before redefinition
-
-        usdouble = secondsfrac * 1e6
-        assert abs(usdouble) < 2.1e6    # exact value not critical
-        # secondsfrac isn't referenced again
-
-        if isinstance(microseconds, float):
-            microseconds = round(microseconds + usdouble)
-            seconds, microseconds = divmod(microseconds, 1000000)
-            days, seconds = divmod(seconds, 24*3600)
-            d += days
-            s += seconds
-        else:
-            microseconds = int(microseconds)
-            seconds, microseconds = divmod(microseconds, 1000000)
-            days, seconds = divmod(seconds, 24*3600)
-            d += days
-            s += seconds
-            microseconds = round(microseconds + usdouble)
-        assert isinstance(s, int)
-        assert isinstance(microseconds, int)
-        assert abs(s) <= 3 * 24 * 3600
-        assert abs(microseconds) < 3.1e6
-
-        # Just a little bit of carrying possible for microseconds and seconds.
-        seconds, us = divmod(microseconds, 1000000)
-        s += seconds
-        days, s = divmod(s, 24*3600)
-        d += days
-
-        assert isinstance(d, int)
-        assert isinstance(s, int) and 0 <= s < 24*3600
-        assert isinstance(us, int) and 0 <= us < 1000000
-
-        if abs(d) > 999999999:
-            raise OverflowError("timedelta # of days is too large: %d" % d)
-
-        self = object.__new__(cls)
-        self._days = d
-        self._seconds = s
-        self._microseconds = us
-        self._hashcode = -1
-        return self
-    
-    ## TODO: Implement __repr__
 
 
 class time:
@@ -1052,7 +1068,11 @@ class datetime(date):
         raise NotImplementedError()
 
     def utcoffset(self):
-        raise NotImplementedError()
+        if self._tzinfo is None:
+            return None
+        offset = self._tzinfo.utcoffset(self)
+        _check_utc_offset("utcoffset", offset)
+        return offset
 
     def dst(self):
         raise NotImplementedError()
