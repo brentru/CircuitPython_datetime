@@ -24,6 +24,7 @@ Implementation Notes
 """
 import time as _time
 import math as _math
+from micropython import const
 
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
@@ -32,12 +33,18 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
 
 
 # The datetime module exports the following constants:
-MINYEAR = 1
-MAXYEAR = 9999
+MINYEAR = const(1)
+MAXYEAR = const(9999)
 
 # https://svn.python.org/projects/sandbox/trunk/datetime/datetime.py
-_DAYS_IN_MONTH = [None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-_DAYS_BEFORE_MONTH = [None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334]
+# TODO: make this a tuple
+_DAYS_IN_MONTH = (None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+# TODO: make this a tuple
+_DAYS_BEFORE_MONTH = (None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+
+_DI400Y = const(146097)
+_DI100Y = const(36524)
+_DI4Y   = const(1461)
 
 # universally shared
 def _cmp(x, y):
@@ -57,7 +64,85 @@ def _check_time_fields(hour, minute, second, microsecond, fold):
         raise ValueError('microsecond must be in 0..999999', microsecond)
     if fold not in (0, 1): # from CPython API
         raise ValueError('fold must be either 0 or 1', fold)
-    
+
+# name is the offset-producing method, "utcoffset" or "dst".
+# offset is what it returned.
+# If offset isn't None or timedelta, raises TypeError.
+# If offset is None, returns None.
+# Else offset is checked for being in range, and a whole # of minutes.
+# If it is, its integer value is returned.  Else ValueError is raised.
+def _check_utc_offset(name, offset):
+    assert name in ("utcoffset", "dst")
+    if offset is None:
+        return
+    if not isinstance(offset, timedelta):
+        raise TypeError("tzinfo.%s() must return None "
+                        "or timedelta, not '%s'" % (name, type(offset)))
+    if offset % timedelta(minutes=1) or offset.microseconds:
+        raise ValueError("tzinfo.%s() must return a whole number "
+                         "of minutes, got %s" % (name, offset))
+    if not -timedelta(1) < offset < timedelta(1):
+        raise ValueError("%s()=%s, must be must be strictly between"
+                         " -timedelta(hours=24) and timedelta(hours=24)"
+                         % (name, offset))
+
+# Correctly substitute for %z and %Z escapes in strftime formats.
+def _wrap_strftime(object, format, timetuple):
+    # Don't call utcoffset() or tzname() unless actually needed.
+    freplace = None # the string to use for %f
+    zreplace = None # the string to use for %z
+    Zreplace = None # the string to use for %Z
+
+    # Scan format for %z and %Z escapes, replacing as needed.
+    newformat = []
+    push = newformat.append
+    i, n = 0, len(format)
+    while i < n:
+        ch = format[i]
+        i += 1
+        if ch == '%':
+            if i < n:
+                ch = format[i]
+                i += 1
+                if ch == 'f':
+                    if freplace is None:
+                        freplace = '%06d' % getattr(object,
+                                                    'microsecond', 0)
+                    newformat.append(freplace)
+                elif ch == 'z':
+                    if zreplace is None:
+                        zreplace = ""
+                        if hasattr(object, "utcoffset"):
+                            offset = object.utcoffset()
+                            if offset is not None:
+                                sign = '+'
+                                if offset.days < 0:
+                                    offset = -offset
+                                    sign = '-'
+                                h, m = divmod(offset, timedelta(hours=1))
+                                assert not m % timedelta(minutes=1), "whole minute"
+                                m //= timedelta(minutes=1)
+                                zreplace = '%c%02d%02d' % (sign, h, m)
+                    assert '%' not in zreplace
+                    newformat.append(zreplace)
+                elif ch == 'Z':
+                    if Zreplace is None:
+                        Zreplace = ""
+                        if hasattr(object, "tzname"):
+                            s = object.tzname()
+                            if s is not None:
+                                # strftime is going to have at this: escape %
+                                Zreplace = s.replace('%', '%%')
+                    newformat.append(Zreplace)
+                else:
+                    push('%')
+                    push(ch)
+            else:
+                push('%')
+        else:
+            push(ch)
+    newformat = "".join(newformat)
+    return _time.strftime(newformat, timetuple)
 
 # date
 def _is_leap(year):
@@ -117,10 +202,6 @@ def _format_time(hh, mm, ss, us, timespec='auto'):
         spec = '{:02d}:{:02d}:{:02d}'
     fmt = spec
     return fmt.format(hh, mm, ss, us)
-
-_DI400Y = _days_before_year(401)    # number of days in 400 years
-_DI100Y = _days_before_year(101)    #    "    "   "   " 100   "
-_DI4Y   = _days_before_year(5)      #    "    "   "   "   4   "
 
 # A 4-year cycle has an extra leap day over what we'd get from pasting
 # together 4 single years.
@@ -485,6 +566,8 @@ class timedelta:
         self._microseconds = us
         self._hashcode = -1
         return self
+    
+    ## TODO: Implement __repr__
 
 
 class time:
@@ -628,9 +711,43 @@ class time:
     # For a time t, str(t) is equivalent to t.isoformat()
     __str__ = isoformat
 
+    def _tzstr(self, sep=":"):
+        """Return formatted timezone offset (+xx:xx) or None."""
+        off = self.utcoffset()
+        if off is not None:
+            if off.days < 0:
+                sign = "-"
+                off = -off
+            else:
+                sign = "+"
+            hh, mm = divmod(off, timedelta(hours=1))
+            assert not mm % timedelta(minutes=1), "whole minute"
+            mm //= timedelta(minutes=1)
+            assert 0 <= hh < 24
+            off = "%s%02d%s%02d" % (sign, hh, sep, mm)
+        return off
+
+    def strftime(self, fmt):
+        """Format using strftime().  The date part of the timestamp passed
+        to underlying strftime should not be used.
+        """
+        # The year must be >= 1000 else Python's strftime implementation
+        # can raise a bogus exception.
+        timetuple = (1900, 1, 1,
+                     self._hour, self._minute, self._second,
+                     0, 1, -1)
+        return _wrap_strftime(self, fmt, timetuple)
+
+
     # Timezone functions
-    def utcoffset():
-        raise NotImplementedError()
+    def utcoffset(self):
+        """Return the timezone offset in minutes east of UTC (negative west of
+        UTC)."""
+        if self._tzinfo is None:
+            return None
+        offset = self._tzinfo.utcoffset(None)
+        _check_utc_offset("utcoffset", offset)
+        return offset
     
     def tzname():
         raise NotImplementedError()
