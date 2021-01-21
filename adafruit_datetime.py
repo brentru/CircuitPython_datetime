@@ -636,7 +636,6 @@ class time:
         # TODO: Impl. tzinfo checks
         # _check_tzinfo_arg(tzinfo)
         self = object.__new__(cls)
-        self.hour = hour
         self._hour = hour
         self._minute = minute
         self._second = second
@@ -741,7 +740,7 @@ class time:
     def __hash__(self):
         """Hash."""
         if self._hashcode == -1:
-            if self.fold:
+            if self._fold:
                 t = self.replace(fold=0)
             else:
                 t = self
@@ -1244,7 +1243,5 @@ class datetime(date):
                 self._hashcode = hash(timedelta(days, seconds, self.microsecond) - tzoff)
         return self._hashcode
 
-
-# TODO: switch below once we have tzinfo
-#_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
-_EPOCH = datetime(1970, 1, 1)
+# TODO: This isn't right...
+#_EPOCH = datetime(1970, 1, 1)
