@@ -513,7 +513,7 @@ class date:
     @classmethod
     def today(cls):
         """Return the current local date."""
-        return cls.fromtimestamp(time.time())
+        return cls.fromtimestamp(_time.time())
 
     @classmethod
     def fromisoformat(cls, date_string):
@@ -895,12 +895,10 @@ class datetime(date):
         _check_time_fields(hour, minute, second, microsecond, fold)
         # TODO: TZINFO support
         # _check_tzinfo_arg(tzinfo)
-        self = date.__new__(cls)
-        self._year = year
-        self._month = month
-        self._day = day
+        self = date.__new__(cls, year, month, day)
         self._hour = hour
         self._minute = minute
+        self._second = second
         self._microsecond = microsecond
         self._tzinfo = tzinfo
         self._fold = fold
@@ -952,55 +950,16 @@ class datetime(date):
 
     # Class methods
 
-    # from CPython
-    # https://github.com/python/cpython/blob/master/Lib/datetime.py
     @classmethod
-    def _fromtimestamp(cls, t, utc, tz):
-        """Construct a datetime from a POSIX timestamp (like time.time()).
-        A timezone info object may be passed in as well.
-        """
-        frac, t = _math.modf(t)
-        us = round(frac * 1e6)
-        if us >= 1000000:
-            t += 1
-            us -= 1000000
-        elif us < 0:
-            t -= 1
-            us += 1000000
-
-        converter = _time.gmtime if utc else _time.localtime
-        y, m, d, hh, mm, ss, weekday, jday, dst = converter(t)
-        ss = min(ss, 59)    # clamp out leap seconds if the platform has them
-        result = cls(y, m, d, hh, mm, ss, us, tz)
-        if tz is None:
-            # As of version 2015f max fold in IANA database is
-            # 23 hours at 1969-09-30 13:00:00 in Kwajalein.
-            # Let's probe 24 hours in the past to detect a transition:
-            max_fold_seconds = 24 * 3600
-
-            y, m, d, hh, mm, ss = converter(t - max_fold_seconds)[:6]
-            probe1 = cls(y, m, d, hh, mm, ss, us, tz)
-            trans = result - probe1 - timedelta(0, max_fold_seconds)
-            if trans.days < 0:
-                y, m, d, hh, mm, ss = converter(t + trans // timedelta(0, 1))[:6]
-                probe2 = cls(y, m, d, hh, mm, ss, us, tz)
-                if probe2 == result:
-                    result._fold = 1
-        else:
-            result = tz.fromutc(result)
-        return result
-
-    @classmethod
-    def fromtimestamp(cls, timestamp, tz=None):
+    def fromtimestamp(cls, timestamp):
         """Return the local date and time corresponding to the POSIX timestamp,
         such as is returned by time.time(). If optional argument tz is None or not
         specified, the timestamp is converted to the platform’s local date and time,
         and the returned datetime object is naive.
 
         """
-        # TODO
-        #_check_tzinfo_arg(tz)
-        return cls._fromtimestamp(timestamp, tz is not None, tz)
+        y, m, d, hh, mm, ss, weekday, jday, dst = _time.localtime(timestamp)
+        return cls(y, m, d)
 
     # NOTE: now() is preferred over today() and utcnow()
     @classmethod
@@ -1012,7 +971,7 @@ class datetime(date):
     @classmethod
     def utcfromtimestamp(cls, timestamp):
         """Return the UTC datetime corresponding to the POSIX timestamp, with tzinfo None"""
-        return cls._fromtimestamp(timestamp)
+        return cls.fromtimestamp(timestamp)
 
     # from CPython
     # https://github.com/python/cpython/blob/master/Lib/datetime.py
@@ -1084,7 +1043,7 @@ class datetime(date):
 
     def toordinal(self):
         """Return the proleptic Gregorian ordinal of the date."""
-        return _date_class.toordinal()
+        return _ymd2ord(self._year, self._month, self._day)
 
     def timestamp(self):
         "Return POSIX timestamp as float"
