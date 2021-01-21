@@ -158,6 +158,23 @@ def _check_tzname(name):
                         "not '%s'" % type(name))
 
 # date
+def _parse_isoformat_date(dtstr):
+    # It is assumed that this function will only be called with a
+    # string of length exactly 10, and (though this is not used) ASCII-only
+    year = int(dtstr[0:4])
+    if dtstr[4] != '-':
+        raise ValueError('Invalid date separator: %s' % dtstr[4])
+
+    month = int(dtstr[5:7])
+
+    if dtstr[7] != '-':
+        raise ValueError('Invalid date separator')
+
+    day = int(dtstr[8:10])
+
+    return [year, month, day]
+
+
 def _is_leap(year):
     "year -> 1 if leap year, else 0."
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
@@ -913,22 +930,144 @@ class datetime(date):
         """
         return self._tzinfo
 
-
     # Class methods
 
-    # today
+    # from CPython
+    # https://github.com/python/cpython/blob/master/Lib/datetime.py
+    @classmethod
+    def _fromtimestamp(cls, t, utc, tz):
+        """Construct a datetime from a POSIX timestamp (like time.time()).
+        A timezone info object may be passed in as well.
+        """
+        frac, t = _math.modf(t)
+        us = round(frac * 1e6)
+        if us >= 1000000:
+            t += 1
+            us -= 1000000
+        elif us < 0:
+            t -= 1
+            us += 1000000
 
-    # now
+        converter = _time.gmtime if utc else _time.localtime
+        y, m, d, hh, mm, ss, weekday, jday, dst = converter(t)
+        ss = min(ss, 59)    # clamp out leap seconds if the platform has them
+        result = cls(y, m, d, hh, mm, ss, us, tz)
+        if tz is None:
+            # As of version 2015f max fold in IANA database is
+            # 23 hours at 1969-09-30 13:00:00 in Kwajalein.
+            # Let's probe 24 hours in the past to detect a transition:
+            max_fold_seconds = 24 * 3600
 
-    # fromtimestamp
+            y, m, d, hh, mm, ss = converter(t - max_fold_seconds)[:6]
+            probe1 = cls(y, m, d, hh, mm, ss, us, tz)
+            trans = result - probe1 - timedelta(0, max_fold_seconds)
+            if trans.days < 0:
+                y, m, d, hh, mm, ss = converter(t + trans // timedelta(0, 1))[:6]
+                probe2 = cls(y, m, d, hh, mm, ss, us, tz)
+                if probe2 == result:
+                    result._fold = 1
+        else:
+            result = tz.fromutc(result)
+        return result
 
-    # not sure if we want..
-    # #utcnow
-    #utcfromtimestamp
+    @classmethod
+    def fromtimestamp(cls, timestamp, tz=None):
+        """Return the local date and time corresponding to the POSIX timestamp,
+        such as is returned by time.time(). If optional argument tz is None or not
+        specified, the timestamp is converted to the platform’s local date and time,
+        and the returned datetime object is naive.
 
-    # fromordinal
+        """
+        # TODO
+        #_check_tzinfo_arg(tz)
+        return cls._fromtimestamp(timestamp, tz is not None, tz)
 
-    # fromisoformat
+    # NOTE: now() is preferred over today() and utcnow()
+    @classmethod
+    def now(cls, tz=None):
+        """Return the current local date and time."""
+        return cls.fromtimestamp(_time.time(), tz)
 
-    # fromisocal
-    # dont want
+
+    @classmethod
+    def utcfromtimestamp(cls, timestamp):
+        """Return the UTC datetime corresponding to the POSIX timestamp, with tzinfo None"""
+        return cls._fromtimestamp(timestamp)
+
+    # from CPython
+    # https://github.com/python/cpython/blob/master/Lib/datetime.py
+    @classmethod
+    def fromisoformat(cls, date_string):
+        """Return a datetime corresponding to a date_string in one of the
+        formats emitted by date.isoformat() and datetime.isoformat().
+        :param str date_string: ISO-formatted date or datetime string.
+
+        """
+        # TODO!
+        pass
+
+
+    # Instance methods
+    def date(self):
+        """Return date object with same year, month and day."""
+        return _date_class(self._year, self._month, self._day)
+    
+    def time(self):
+        """Return time object with same hour, minute, second, microsecond and fold.
+        tzinfo is None. See also method timetz().
+        """
+        return _time_class(self._hour, self._minute, self._second,
+                           self._microsecond, None, self._fold)
+    def timetz(self):
+        """Return time object with same hour, minute, second, microsecond, fold, and tzinfo attributes. See also method time().
+        Not implemented.
+        """
+        raise NotImplementedError()
+
+    def replace(self):
+        # TODO
+        pass
+
+    #timetuple
+
+    def astimezone(self):
+        raise NotImplementedError()
+
+
+    def utcoffset(self):
+        raise NotImplementedError()
+
+    def dst(self):
+        raise NotImplementedError()
+
+
+    def tzname(self):
+        raise NotImplementedError()
+
+    def utctuple(self):
+        raise NotImplementedError()
+
+    def toordinal(self):
+        """Return the proleptic Gregorian ordinal of the date."""
+        return _date_class.toordinal()
+
+    #timestamp
+    def timestamp(self):
+        "Return POSIX timestamp as float"
+        if self._tzinfo is None:
+            s = self._mktime()
+            return s + self.microsecond / 1e6
+        else:
+            return (self - _EPOCH).total_seconds()
+
+    #weekday
+
+
+    #isoweekday
+
+    #isocalendar
+    # dontimpl, or impl and call from date
+
+# TODO: switch below once we have tzinfo
+#_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+_EPOCH = datetime(1970, 1, 1)
