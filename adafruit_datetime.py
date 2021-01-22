@@ -96,7 +96,7 @@ def _check_utc_offset(name, offset):
         )
 
 
-# Correctly substitute for %z and %Z escapes in strftime formats.
+# pylint: disable=invalid-name, too-many-locals, too-many-nested-blocks, too-many-branches, too-many-statements
 def _wrap_strftime(time_obj, strftime_fmt, timetuple):
     # Don't call utcoffset() or tzname() unless actually needed.
     f_replace = None  # the string to use for %f
@@ -226,8 +226,8 @@ def _days_before_month(year, month):
 
 def _days_before_year(year):
     "year -> number of days before January 1st of year."
-    y = year - 1
-    return y * 365 + y // 4 - y // 100 + y // 400
+    year = year - 1
+    return year * 365 + year // 4 - year // 100 + year // 400
 
 
 def _ymd2ord(year, month, day):
@@ -255,7 +255,7 @@ def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_i
         )
     )
 
-
+# pylint: disable=invalid-name
 def _format_time(hh, mm, ss, us, timespec="auto"):
     if timespec != "auto":
         raise NotImplementedError("Only default timespec supported")
