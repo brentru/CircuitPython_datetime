@@ -714,6 +714,7 @@ class date:
     def __reduce__(self):
         return (self.__class__, self._getstate())
 
+
 class time:
     """A time object represents a (local) time of day, independent of
     any particular day, and subject to adjustment via a tzinfo object.
@@ -968,7 +969,8 @@ class time:
         return (basestate,)
 
 
-class datetime(date):
+# pylint: disable=too-many-instance-attributes
+class datetime:
     """A datetime object is a single object containing all the information
     from a date object and a time object. Like a date object, datetime assumes
     the current Gregorian calendar extended in both directions; like a time object,
@@ -1087,7 +1089,67 @@ class datetime(date):
         # TODO!
         pass
 
+    @classmethod
+    def combine(cls, date, time, tzinfo=True):
+        """Return a new datetime object whose date components are equal to the
+        given date object’s, and whose time components are equal to the given time object’s.
+
+        """
+        if not isinstance(date, _date_class):
+            raise TypeError("date argument must be a date instance")
+        if not isinstance(time, _time_class):
+            raise TypeError("time argument must be a time instance")
+        if tzinfo is True:
+            tzinfo = time.tzinfo
+        return cls(
+            date.year,
+            date.month,
+            date.day,
+            time.hour,
+            time.minute,
+            time.second,
+            time.microsecond,
+            tzinfo,
+            fold=time.fold,
+        )
+
     # Instance methods
+
+    def _mktime(self):
+        """Return integer POSIX timestamp."""
+        epoch = datetime(1970, 1, 1)
+        max_fold_seconds = 24 * 3600
+        t = (self - epoch) // timedelta(0, 1)
+
+        def local(u):
+            y, m, d, hh, mm, ss = _time.localtime(u)[:6]
+            return (datetime(y, m, d, hh, mm, ss) - epoch) // timedelta(0, 1)
+
+        # Our goal is to solve t = local(u) for u.
+        a = local(t) - t
+        u1 = t - a
+        t1 = local(u1)
+        if t1 == t:
+            # We found one solution, but it may not be the one we need.
+            # Look for an earlier solution (if `fold` is 0), or a
+            # later one (if `fold` is 1).
+            u2 = u1 + (-max_fold_seconds, max_fold_seconds)[self._fold]
+            b = local(u2) - u2
+            if a == b:
+                return u1
+        else:
+            b = t1 - u1
+            assert a != b
+        u2 = t - b
+        t2 = local(u2)
+        if t2 == t:
+            return u2
+        if t1 == t:
+            return u1
+        # We have found both offsets a and b, but neither t - a nor t - b is
+        # a solution.  This means t is in the gap.
+        return (max, min)[self._fold](u1, u2)
+
     def date(self):
         """Return date object with same year, month and day."""
         return _date_class(self._year, self._month, self._day)
@@ -1095,14 +1157,26 @@ class datetime(date):
     def time(self):
         """Return time object with same hour, minute, second, microsecond and fold.
         tzinfo is None. See also method timetz().
+
         """
         return _time_class(
-            self._hour, self._minute, self._second, self._microsecond, None, self._fold
+            self._hour, self._minute, self._second, self._microsecond, fold=self._fold
         )
+
+    def dst(self):
+        """If tzinfo is None, returns None, else returns self.tzinfo.dst(self),
+        and raises an exception if the latter doesn’t return None or a timedelta
+        object with magnitude less than one day.
+
+        """
+        if self._tzinfo is None:
+            return None
+        offset = self._tzinfo.dst(self)
+        _check_utc_offset("dst", offset)
+        return offset
 
     def timetuple(self):
         """Return local time tuple compatible with time.localtime()."""
-        # TODO: Implement dst() method
         dst = self.dst()
         if dst is None:
             dst = -1
@@ -1139,6 +1213,46 @@ class datetime(date):
     def isoweekday(self):
         """Return the day of the week as an integer, where Monday is 1 and Sunday is 7. """
         return self.toordinal() % 7 or 7
+
+    def replace(
+        self,
+        year=None,
+        month=None,
+        day=None,
+        hour=None,
+        minute=None,
+        second=None,
+        microsecond=None,
+        tzinfo=True,
+        *,
+        fold=None
+    ):
+        """Return a datetime with the same attributes,
+        except for those attributes given new values by
+        whichever keyword arguments are specified.
+
+        """
+        if year is None:
+            year = self.year
+        if month is None:
+            month = self.month
+        if day is None:
+            day = self.day
+        if hour is None:
+            hour = self.hour
+        if minute is None:
+            minute = self.minute
+        if second is None:
+            second = self.second
+        if microsecond is None:
+            microsecond = self.microsecond
+        if tzinfo is True:
+            tzinfo = self.tzinfo
+        if fold is None:
+            fold = self._fold
+        return type(self)(
+            year, month, day, hour, minute, second, microsecond, tzinfo, fold=fold
+        )
 
     # Comparisons of datetime objects.
     def __eq__(self, other):
@@ -1179,7 +1293,6 @@ class datetime(date):
             otoff = other.utcoffset()
             # Assume that allow_mixed means that we are called from __eq__
             if allow_mixed:
-                # TODO This requires a REPLACE METHOD! to be implemented in datetime
                 if myoff != self.replace(fold=not self._fold).utcoffset():
                     return 2
                 if otoff != other.replace(fold=not other.fold).utcoffset():
@@ -1278,8 +1391,33 @@ class datetime(date):
                 )
         return self._hashcode
 
+    def _getstate(self, protocol=3):
+        yhi, ylo = divmod(self._year, 256)
+        us2, us3 = divmod(self._microsecond, 256)
+        us1, us2 = divmod(us2, 256)
+        m = self._month
+        if self._fold and protocol > 3:
+            m += 128
+        basestate = bytes(
+            [
+                yhi,
+                ylo,
+                m,
+                self._day,
+                self._hour,
+                self._minute,
+                self._second,
+                us1,
+                us2,
+                us3,
+            ]
+        )
+        if not self._tzinfo is None:
+            return (basestate, self._tzinfo)
+        return (basestate,)
+
 
 # TODO: This isn't right...
 _EPOCH = datetime(1970, 1, 1)
-_date_class = date # so functions w/ args named "date" can get at the class
+_date_class = date  # so functions w/ args named "date" can get at the class
 _time_class = time  # so functions w/ args named "time" can get at the class
