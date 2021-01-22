@@ -1057,15 +1057,33 @@ class datetime:
     # Class methods
 
     @classmethod
-    def fromtimestamp(cls, timestamp):
+    def fromtimestamp(cls, timestamp, tz=None):
         """Return the local date and time corresponding to the POSIX timestamp,
         such as is returned by time.time(). If optional argument tz is None or not
         specified, the timestamp is converted to the platform’s local date and time,
         and the returned datetime object is naive.
 
         """
-        tm_struct = _time.localtime(timestamp)
-        return cls(tm_struct[0], tm_struct[1], tm_struct[2])
+        #_check_tzinfo_arg(tz)
+
+        converter = _time.localtime if tz is None else _time.gmtime
+
+        timestamp, frac = divmod(timestamp, 1.0)
+        us = int(frac * 1e6)
+
+        # If timestamp is less than one microsecond smaller than a
+        # full second, us can be rounded up to 1000000.  In this case,
+        # roll over to seconds, otherwise, ValueError is raised
+        # by the constructor.
+        if us == 1000000:
+            timestamp += 1
+            us = 0
+        y, m, d, hh, mm, ss, weekday, jday, dst = converter(timestamp)
+        ss = min(ss, 59)    # clamp out leap seconds if the platform has them
+        result = cls(y, m, d, hh, mm, ss, us, tz)
+        if tz is not None:
+            result = tz.fromutc(result)
+        return result
 
     @classmethod
     def now(cls):
@@ -1075,7 +1093,20 @@ class datetime:
     @classmethod
     def utcfromtimestamp(cls, timestamp):
         """Return the UTC datetime corresponding to the POSIX timestamp, with tzinfo None"""
-        return cls.fromtimestamp(timestamp)
+        timestamp, frac = divmod(timestamp, 1.0)
+        us = int(frac * 1e6)
+
+        # If timestamp is less than one microsecond smaller than a
+        # full second, us can be rounded up to 1000000.  In this case,
+        # roll over to seconds, otherwise, ValueError is raised
+        # by the constructor.
+        if us == 1000000:
+            timestamp += 1
+            us = 0
+        y, m, d, hh, mm, ss, weekday, jday, dst = _time.gmtime(timestamp)
+        ss = min(ss, 59)    # clamp out leap seconds if the platform has them
+        return cls(y, m, d, hh, mm, ss, us)
+
 
     # from CPython
     # https://github.com/python/cpython/blob/master/Lib/datetime.py

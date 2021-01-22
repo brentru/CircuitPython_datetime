@@ -430,6 +430,7 @@ class TestDateTime(TestDate):
         ts = time.time()
         expected = time.localtime(ts)
         got = self.theclass.fromtimestamp(ts)
+        print(expected, got)
         self.verify_field_equality(expected, got)
 
     def test_utcfromtimestamp(self):
