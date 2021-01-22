@@ -35,24 +35,22 @@ __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
 MINYEAR = const(1)
 MAXYEAR = const(9999)
 _MAXORDINAL = const(3652059)
-
-# https://svn.python.org/projects/sandbox/trunk/datetime/datetime.py
-# TODO: make this a tuple
-_DAYS_IN_MONTH = (None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-# TODO: make this a tuple
-_DAYS_BEFORE_MONTH = (None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
-
 _DI400Y = const(146097)
 _DI100Y = const(36524)
 _DI4Y = const(1461)
+# https://svn.python.org/projects/sandbox/trunk/datetime/datetime.py
+_DAYS_IN_MONTH = (None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+_DAYS_BEFORE_MONTH = (None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
 
 # universally shared
-def _cmp(x, y):
-    return 0 if x == y else 1 if x > y else -1
+def _cmp(obj_x, obj_y):
+    return 0 if obj_x == obj_y else 1 if obj_x > obj_y else -1
 
 
-def _cmperror(x, y):
-    raise TypeError("can't compare '%s' to '%s'" % (type(x).__name__, type(y).__name__))
+def _cmperror(obj_x, obj_y):
+    raise TypeError(
+        "can't compare '%s' to '%s'" % (type(obj_x).__name__, type(obj_y).__name__)
+    )
 
 
 # time
@@ -99,32 +97,32 @@ def _check_utc_offset(name, offset):
 
 
 # Correctly substitute for %z and %Z escapes in strftime formats.
-def _wrap_strftime(object, format, timetuple):
+def _wrap_strftime(time_obj, strftime_fmt, timetuple):
     # Don't call utcoffset() or tzname() unless actually needed.
-    freplace = None  # the string to use for %f
-    zreplace = None  # the string to use for %z
-    Zreplace = None  # the string to use for %Z
+    f_replace = None  # the string to use for %f
+    z_replace = None  # the string to use for %z
+    Z_replace = None  # the string to use for %Z
 
-    # Scan format for %z and %Z escapes, replacing as needed.
+    # Scan strftime_fmt for %z and %Z escapes, replacing as needed.
     newformat = []
     push = newformat.append
-    i, n = 0, len(format)
+    i, n = 0, len(strftime_fmt)
     while i < n:
-        ch = format[i]
+        ch = strftime_fmt[i]
         i += 1
         if ch == "%":
             if i < n:
-                ch = format[i]
+                ch = strftime_fmt[i]
                 i += 1
                 if ch == "f":
-                    if freplace is None:
-                        freplace = "%06d" % getattr(object, "microsecond", 0)
-                    newformat.append(freplace)
+                    if f_replace is None:
+                        f_replace = "%06d" % getattr(time_obj, "microsecond", 0)
+                    newformat.append(f_replace)
                 elif ch == "z":
-                    if zreplace is None:
-                        zreplace = ""
-                        if hasattr(object, "utcoffset"):
-                            offset = object.utcoffset()
+                    if z_replace is None:
+                        z_replace = ""
+                        if hasattr(time_obj, "utcoffset"):
+                            offset = time_obj.utcoffset()
                             if offset is not None:
                                 sign = "+"
                                 if offset.days < 0:
@@ -135,7 +133,7 @@ def _wrap_strftime(object, format, timetuple):
                                 s = rest.seconds
                                 u = offset.microseconds
                                 if u:
-                                    zreplace = "%c%02d%02d%02d.%06d" % (
+                                    z_replace = "%c%02d%02d%02d.%06d" % (
                                         sign,
                                         h,
                                         m,
@@ -143,20 +141,20 @@ def _wrap_strftime(object, format, timetuple):
                                         u,
                                     )
                                 elif s:
-                                    zreplace = "%c%02d%02d%02d" % (sign, h, m, s)
+                                    z_replace = "%c%02d%02d%02d" % (sign, h, m, s)
                                 else:
-                                    zreplace = "%c%02d%02d" % (sign, h, m)
-                    assert "%" not in zreplace
-                    newformat.append(zreplace)
+                                    z_replace = "%c%02d%02d" % (sign, h, m)
+                    assert "%" not in z_replace
+                    newformat.append(z_replace)
                 elif ch == "Z":
-                    if Zreplace is None:
-                        Zreplace = ""
-                        if hasattr(object, "tzname"):
-                            s = object.tzname()
+                    if Z_replace is None:
+                        Z_replace = ""
+                        if hasattr(time_obj, "tzname"):
+                            s = time_obj.tzname()
                             if s is not None:
                                 # strftime is going to have at this: escape %
-                                Zreplace = s.replace("%", "%%")
-                    newformat.append(Zreplace)
+                                Z_replace = s.replace("%", "%%")
+                    newformat.append(Z_replace)
                 else:
                     push("%")
                     push(ch)
@@ -477,7 +475,46 @@ class timedelta:
         self._hashcode = -1
         return self
 
-    ## TODO: Implement __repr__
+    def total_seconds(self):
+        """Total seconds in the duration."""
+        return (
+            (self.days * 86400 + self.seconds) * 10 ** 6 + self.microseconds
+        ) / 10 ** 6
+
+    def __repr__(self):
+        args = []
+        if self._days:
+            args.append("days=%d" % self._days)
+        if self._seconds:
+            args.append("seconds=%d" % self._seconds)
+        if self._microseconds:
+            args.append("microseconds=%d" % self._microseconds)
+        if not args:
+            args.append("0")
+        return "%s.%s(%s)" % (
+            self.__class__.__module__,
+            self.__class__.__qualname__,
+            ", ".join(args),
+        )
+
+    def __str__(self):
+        mm, ss = divmod(self._seconds, 60)
+        hh, mm = divmod(mm, 60)
+        s = "%d:%02d:%02d" % (hh, mm, ss)
+        if self._days:
+
+            def plural(n):
+                return n, abs(n) != 1 and "s" or ""
+
+            s = ("%d day%s, " % plural(self._days)) + s
+        if self._microseconds:
+            s = s + ".%06d" % self._microseconds
+        return s
+
+    def __neg__(self):
+        # for CPython compatibility, we cannot use
+        # our __class__ here, but need a real timedelta
+        return timedelta(-self._days, -self._seconds, -self._microseconds)
 
 
 class tzinfo:
