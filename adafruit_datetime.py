@@ -782,34 +782,29 @@ class time:
     # Standard conversions and comparisons
     # From CPython, https://github.com/python/cpython/blob/master/Lib/datetime.py
     def __eq__(self, other):
-        if isinstance(other, time):
-            return self._cmp(other, allow_mixed=True) == 0
-        else:
+        if not isinstance(other, time):
             return NotImplemented
+        return self._cmp(other, allow_mixed=True) == 0
 
     def __le__(self, other):
-        if isinstance(other, time):
-            return self._cmp(other) <= 0
-        else:
+        if not isinstance(other, time):
             return NotImplemented
+        return self._cmp(other) <= 0
 
     def __lt__(self, other):
-        if isinstance(other, time):
-            return self._cmp(other) < 0
-        else:
+        if not isinstance(other, time):
             return NotImplemented
+        return self._cmp(other) < 0
 
     def __ge__(self, other):
-        if isinstance(other, time):
-            return self._cmp(other) >= 0
-        else:
+        if not isinstance(other, time):
             return NotImplemented
+        return self._cmp(other) >= 0
 
     def __gt__(self, other):
-        if isinstance(other, time):
-            return self._cmp(other) > 0
-        else:
+        if not isinstance(other, time):
             return NotImplemented
+        return self._cmp(other) > 0
 
     def _cmp(self, other, allow_mixed=False):
         assert isinstance(other, time)
