@@ -999,8 +999,6 @@ class datetime(date):
 
     """
 
-    __slots__ = date.__slots__ + time.__slots__
-
     def __new__(
         cls,
         year,
@@ -1019,7 +1017,11 @@ class datetime(date):
         _check_time_fields(hour, minute, second, microsecond, fold)
         # TODO: TZINFO support
         # _check_tzinfo_arg(tzinfo)
-        self = date.__new__(cls, year, month, day)
+
+        self = object.__new__(cls)
+        self._year = year
+        self._month = month
+        self._day = day
         self._hour = hour
         self._minute = minute
         self._second = second
@@ -1192,40 +1194,30 @@ class datetime(date):
     def __eq__(self, other):
         if isinstance(other, datetime):
             return self._cmp(other, allow_mixed=True) == 0
-        elif not isinstance(other, date):
-            return NotImplemented
         else:
             return False
 
     def __le__(self, other):
         if isinstance(other, datetime):
             return self._cmp(other) <= 0
-        elif not isinstance(other, date):
-            return NotImplemented
         else:
             _cmperror(self, other)
 
     def __lt__(self, other):
         if isinstance(other, datetime):
             return self._cmp(other) < 0
-        elif not isinstance(other, date):
-            return NotImplemented
         else:
             _cmperror(self, other)
 
     def __ge__(self, other):
         if isinstance(other, datetime):
             return self._cmp(other) >= 0
-        elif not isinstance(other, date):
-            return NotImplemented
         else:
             _cmperror(self, other)
 
     def __gt__(self, other):
         if isinstance(other, datetime):
             return self._cmp(other) > 0
-        elif not isinstance(other, date):
-            return NotImplemented
         else:
             _cmperror(self, other)
 
