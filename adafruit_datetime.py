@@ -521,6 +521,54 @@ class timedelta:
         # our __class__ here, but need a real timedelta
         return timedelta(-self._days, -self._seconds, -self._microseconds)
 
+    def __add__(self, other):
+        if isinstance(other, timedelta):
+            # for CPython compatibility, we cannot use
+            # our __class__ here, but need a real timedelta
+            return timedelta(self._days + other._days,
+                             self._seconds + other._seconds,
+                             self._microseconds + other._microseconds)
+        return NotImplemented
+
+    __radd__ = __add__
+
+    def _to_microseconds(self):
+        return ((self._days * (24*3600) + self._seconds) * 1000000 +
+                self._microseconds)
+
+    def __floordiv__(self, other):
+        if not isinstance(other, (int, timedelta)):
+            return NotImplemented
+        usec = self._to_microseconds()
+        if isinstance(other, timedelta):
+            return usec // other._to_microseconds()
+        if isinstance(other, int):
+            return timedelta(0, 0, usec // other)
+
+    def __truediv__(self, other):
+        if not isinstance(other, (int, float, timedelta)):
+            return NotImplemented
+        usec = self._to_microseconds()
+        if isinstance(other, timedelta):
+            return usec / other._to_microseconds()
+        if isinstance(other, int):
+            return timedelta(0, 0, _divide_and_round(usec, other))
+        if isinstance(other, float):
+            a, b = other.as_integer_ratio()
+            return timedelta(0, 0, _divide_and_round(b * usec, a))
+
+    def __mod__(self, other):
+        if isinstance(other, timedelta):
+            r = self._to_microseconds() % other._to_microseconds()
+            return timedelta(0, 0, r)
+        return NotImplemented
+
+    def __divmod__(self, other):
+        if isinstance(other, timedelta):
+            q, r = divmod(self._to_microseconds(),
+                          other._to_microseconds())
+            return q, timedelta(0, 0, r)
+        return NotImplemented
 
 # pylint: disable=no-self-use
 class tzinfo:
@@ -1141,7 +1189,7 @@ class datetime:
             time.second,
             time.microsecond,
             tzinfo,
-            fold=time.fold,
+            fold=time._fold,
         )
 
     # Instance methods
@@ -1372,13 +1420,13 @@ class datetime:
             microseconds=self._microsecond,
         )
         delta += other
-        hour, rem = divmod(delta.seconds, 3600)
+        hour, rem = divmod(delta._seconds, 3600)
         minute, second = divmod(rem, 60)
-        if 0 < delta.days <= _MAXORDINAL:
+        if 0 < delta._days <= _MAXORDINAL:
             # TODO: We need a datetime combine method
             return type(self).combine(
-                date.fromordinal(delta.days),
-                time(hour, minute, second, delta.microseconds, tzinfo=self._tzinfo),
+                date.fromordinal(delta._days),
+                time(hour, minute, second, delta._microseconds, tzinfo=self._tzinfo),
             )
         raise OverflowError("result out of range")
 

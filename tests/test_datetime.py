@@ -1,5 +1,6 @@
 import sys
 import unittest
+from test import support
 from test_date import TestDate
 # CPython standard implementation
 from datetime import datetime as cpython_datetime
@@ -29,6 +30,39 @@ class FixedOffset(tzinfo):
         return self.__name
     def dst(self, dt):
         return self.__dstoffset
+
+#=======================================================================
+# Decorator for running a function in a specific timezone, correctly
+# resetting it afterwards.
+
+def run_with_tz(tz):
+    def decorator(func):
+        def inner(*args, **kwds):
+            try:
+                tzset = time.tzset
+            except AttributeError:
+                raise unittest.SkipTest("tzset required")
+            if 'TZ' in os.environ:
+                orig_tz = os.environ['TZ']
+            else:
+                orig_tz = None
+            os.environ['TZ'] = tz
+            tzset()
+
+            # now run the function, resetting the tz on exceptions
+            try:
+                return func(*args, **kwds)
+            finally:
+                if orig_tz is None:
+                    del os.environ['TZ']
+                else:
+                    os.environ['TZ'] = orig_tz
+                time.tzset()
+
+        inner.__name__ = func.__name__
+        inner.__doc__ = func.__doc__
+        return inner
+    return decorator
 
 class SubclassDatetime(cpy_datetime):
     sub_var = 1
@@ -430,7 +464,6 @@ class TestDateTime(TestDate):
         ts = time.time()
         expected = time.localtime(ts)
         got = self.theclass.fromtimestamp(ts)
-        print(expected, got)
         self.verify_field_equality(expected, got)
 
     def test_utcfromtimestamp(self):
@@ -440,3 +473,151 @@ class TestDateTime(TestDate):
         expected = time.gmtime(ts)
         got = self.theclass.utcfromtimestamp(ts)
         self.verify_field_equality(expected, got)
+
+    # TODO
+    @unittest.skip("Wait until we bring in UTCOFFSET")
+    # Run with US-style DST rules: DST begins 2 a.m. on second Sunday in
+    # March (M3.2.0) and ends 2 a.m. on first Sunday in November (M11.1.0).
+    @support.run_with_tz('EST+05EDT,M3.2.0,M11.1.0')
+    def test_timestamp_naive(self):
+        t = self.theclass(1970, 1, 1)
+        self.assertEqual(t.timestamp(), 18000.0)
+        t = self.theclass(1970, 1, 1, 1, 2, 3, 4)
+        self.assertEqual(t.timestamp(),
+                         18000.0 + 3600 + 2*60 + 3 + 4*1e-6)
+        # Missing hour
+        t0 = self.theclass(2012, 3, 11, 2, 30)
+        t1 = t0.replace(fold=1)
+        self.assertEqual(self.theclass.fromtimestamp(t1.timestamp()),
+                         t0 - timedelta(hours=1))
+        self.assertEqual(self.theclass.fromtimestamp(t0.timestamp()),
+                         t1 + timedelta(hours=1))
+        # Ambiguous hour defaults to DST
+        t = self.theclass(2012, 11, 4, 1, 30)
+        self.assertEqual(self.theclass.fromtimestamp(t.timestamp()), t)
+
+        # Timestamp may raise an overflow error on some platforms
+        # XXX: Do we care to support the first and last year?
+        for t in [self.theclass(2,1,1), self.theclass(9998,12,12)]:
+            try:
+                s = t.timestamp()
+            except OverflowError:
+                pass
+            else:
+                self.assertEqual(self.theclass.fromtimestamp(s), t)
+
+    # TODO
+    @unittest.skip("Hold off on this test until we bring timezone in")
+    def test_timestamp_aware(self):
+        t = self.theclass(1970, 1, 1, tzinfo=timezone.utc)
+        self.assertEqual(t.timestamp(), 0.0)
+        t = self.theclass(1970, 1, 1, 1, 2, 3, 4, tzinfo=timezone.utc)
+        self.assertEqual(t.timestamp(),
+                         3600 + 2*60 + 3 + 4*1e-6)
+        t = self.theclass(1970, 1, 1, 1, 2, 3, 4,
+                          tzinfo=timezone(timedelta(hours=-5), 'EST'))
+        self.assertEqual(t.timestamp(),
+                         18000 + 3600 + 2*60 + 3 + 4*1e-6)
+
+    @support.run_with_tz('MSK-03')  # Something east of Greenwich
+    def test_microsecond_rounding(self):
+        for fts in [self.theclass.fromtimestamp,
+                    self.theclass.utcfromtimestamp]:
+            zero = fts(0)
+            self.assertEqual(zero.second, 0)
+            self.assertEqual(zero.microsecond, 0)
+            one = fts(1e-6)
+            try:
+                minus_one = fts(-1e-6)
+            except OSError:
+                # localtime(-1) and gmtime(-1) is not supported on Windows
+                pass
+            else:
+                self.assertEqual(minus_one.second, 59)
+                self.assertEqual(minus_one.microsecond, 999999)
+
+                t = fts(-1e-8)
+                print(t, zero)
+                self.assertEqual(t, zero)
+                t = fts(-9e-7)
+                self.assertEqual(t, minus_one)
+                t = fts(-1e-7)
+                self.assertEqual(t, zero)
+                t = fts(-1/2**7)
+                self.assertEqual(t.second, 59)
+                self.assertEqual(t.microsecond, 992188)
+
+            t = fts(1e-7)
+            self.assertEqual(t, zero)
+            t = fts(9e-7)
+            self.assertEqual(t, one)
+            t = fts(0.99999949)
+            self.assertEqual(t.second, 0)
+            self.assertEqual(t.microsecond, 999999)
+            t = fts(0.9999999)
+            self.assertEqual(t.second, 1)
+            self.assertEqual(t.microsecond, 0)
+            t = fts(1/2**7)
+            self.assertEqual(t.second, 0)
+            self.assertEqual(t.microsecond, 7812)
+
+    # TODO
+    @unittest.skip("timezone not implemented")
+    def test_timestamp_limits(self):
+        # minimum timestamp
+        min_dt = self.theclass.min.replace(tzinfo=timezone.utc)
+        min_ts = min_dt.timestamp()
+        try:
+            # date 0001-01-01 00:00:00+00:00: timestamp=-62135596800
+            self.assertEqual(self.theclass.fromtimestamp(min_ts, tz=timezone.utc),
+                             min_dt)
+        except (OverflowError, OSError) as exc:
+            # the date 0001-01-01 doesn't fit into 32-bit time_t,
+            # or platform doesn't support such very old date
+            self.skipTest(str(exc))
+
+        # maximum timestamp: set seconds to zero to avoid rounding issues
+        max_dt = self.theclass.max.replace(tzinfo=timezone.utc,
+                                           second=0, microsecond=0)
+        max_ts = max_dt.timestamp()
+        # date 9999-12-31 23:59:00+00:00: timestamp 253402300740
+        self.assertEqual(self.theclass.fromtimestamp(max_ts, tz=timezone.utc),
+                         max_dt)
+
+        # number of seconds greater than 1 year: make sure that the new date
+        # is not valid in datetime.datetime limits
+        delta = 3600 * 24 * 400
+
+        # too small
+        ts = min_ts - delta
+        # converting a Python int to C time_t can raise a OverflowError,
+        # especially on 32-bit platforms.
+        with self.assertRaises((ValueError, OverflowError)):
+            self.theclass.fromtimestamp(ts)
+        with self.assertRaises((ValueError, OverflowError)):
+            self.theclass.utcfromtimestamp(ts)
+
+        # too big
+        ts = max_dt.timestamp() + delta
+        with self.assertRaises((ValueError, OverflowError)):
+            self.theclass.fromtimestamp(ts)
+        with self.assertRaises((ValueError, OverflowError)):
+            self.theclass.utcfromtimestamp(ts)
+
+    def test_insane_fromtimestamp(self):
+        # It's possible that some platform maps time_t to double,
+        # and that this test will fail there.  This test should
+        # exempt such platforms (provided they return reasonable
+        # results!).
+        for insane in -1e200, 1e200:
+            self.assertRaises(OverflowError, self.theclass.fromtimestamp,
+                              insane)
+
+    def test_insane_utcfromtimestamp(self):
+        # It's possible that some platform maps time_t to double,
+        # and that this test will fail there.  This test should
+        # exempt such platforms (provided they return reasonable
+        # results!).
+        for insane in -1e200, 1e200:
+            self.assertRaises(OverflowError, self.theclass.utcfromtimestamp,
+                              insane)
