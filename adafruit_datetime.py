@@ -1118,16 +1118,6 @@ class datetime(date):
             self._hour, self._minute, self._second, self._microsecond, None, self._fold
         )
 
-    def timetz(self):
-        """Return time object with same hour, minute, second, microsecond, fold, and tzinfo attributes. See also method time().
-        Not implemented.
-        """
-        raise NotImplementedError()
-
-    def replace(self):
-        # TODO
-        pass
-
     def timetuple(self):
         """Return local time tuple compatible with time.localtime()."""
         # TODO: Requires tzinfo and dst()
@@ -1143,9 +1133,6 @@ class datetime(date):
             self.year, self.month, self.day, self.hour, self.minute, self.second, dst
         )
 
-    def astimezone(self):
-        raise NotImplementedError()
-
     def utcoffset(self):
         if self._tzinfo is None:
             return None
@@ -1153,26 +1140,16 @@ class datetime(date):
         _check_utc_offset("utcoffset", offset)
         return offset
 
-    def dst(self):
-        raise NotImplementedError()
-
-    def tzname(self):
-        raise NotImplementedError()
-
-    def utctuple(self):
-        raise NotImplementedError()
-
     def toordinal(self):
         """Return the proleptic Gregorian ordinal of the date."""
         return _ymd2ord(self._year, self._month, self._day)
 
     def timestamp(self):
         "Return POSIX timestamp as float"
-        if self._tzinfo is None:
-            s = self._mktime()
-            return s + self.microsecond / 1e6
-        else:
+        if not self._tzinfo is None:
             return (self - _EPOCH).total_seconds()
+        s = self._mktime()
+        return s + self.microsecond / 1e6
 
     def weekday(self):
         """Return the day of the week as an integer, where Monday is 0 and Sunday is 6."""
@@ -1182,44 +1159,36 @@ class datetime(date):
         """Return the day of the week as an integer, where Monday is 1 and Sunday is 7. """
         return self.toordinal() % 7 or 7
 
-    def isocalendar(self):
-        raise NotImplementedError()
-
     # Comparisons of datetime objects.
     def __eq__(self, other):
-        if isinstance(other, datetime):
-            return self._cmp(other, allow_mixed=True) == 0
-        else:
+        if not isinstance(other, datetime):
             return False
+        return self._cmp(other, allow_mixed=True) == 0
 
     def __le__(self, other):
-        if isinstance(other, datetime):
-            return self._cmp(other) <= 0
-        else:
+        if not isinstance(other, datetime):
             _cmperror(self, other)
+        return self._cmp(other) <= 0
 
     def __lt__(self, other):
-        if isinstance(other, datetime):
-            return self._cmp(other) < 0
-        else:
+        if not isinstance(other, datetime):
             _cmperror(self, other)
+        return self._cmp(other) < 0
 
     def __ge__(self, other):
-        if isinstance(other, datetime):
-            return self._cmp(other) >= 0
-        else:
+        if not isinstance(other, datetime):
             _cmperror(self, other)
+        return self._cmp(other) >= 0
 
     def __gt__(self, other):
-        if isinstance(other, datetime):
-            return self._cmp(other) > 0
-        else:
+        if not isinstance(other, datetime):
             _cmperror(self, other)
+        return self._cmp(other) > 0
 
     def _cmp(self, other, allow_mixed=False):
         assert isinstance(other, datetime)
         mytz = self._tzinfo
-        ottz = other._tzinfo
+        ottz = other.tzinfo
         myoff = otoff = None
 
         if mytz is ottz:
@@ -1229,7 +1198,7 @@ class datetime(date):
             otoff = other.utcoffset()
             # Assume that allow_mixed means that we are called from __eq__
             if allow_mixed:
-                if myoff != self.replace(fold=not self.fold).utcoffset():
+                if myoff != self.replace(fold=not self._fold).utcoffset():
                     return 2
                 if otoff != other.replace(fold=not other.fold).utcoffset():
                     return 2
@@ -1247,20 +1216,19 @@ class datetime(date):
                     self._microsecond,
                 ),
                 (
-                    other._year,
-                    other._month,
-                    other._day,
-                    other._hour,
-                    other._minute,
-                    other._second,
-                    other._microsecond,
+                    other.year,
+                    other.month,
+                    other.day,
+                    other.hour,
+                    other.minute,
+                    other.second,
+                    other.microsecond,
                 ),
             )
         if myoff is None or otoff is None:
-            if allow_mixed:
-                return 2  # arbitrary non-zero value
-            else:
+            if not allow_mixed:
                 raise TypeError("cannot compare naive and aware datetimes")
+            return 2  # arbitrary non-zero value
         # XXX What follows could be done more efficiently...
         diff = self - other  # this will take offsets into account
         if diff.days < 0:
@@ -1316,10 +1284,7 @@ class datetime(date):
 
     def __hash__(self):
         if self._hashcode == -1:
-            if self.fold:
-                t = self.replace(fold=0)
-            else:
-                t = self
+            t = self
             tzoff = t.utcoffset()
             if tzoff is None:
                 self._hashcode = hash(t._getstate()[0])
