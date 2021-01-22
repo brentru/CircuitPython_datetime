@@ -714,10 +714,6 @@ class date:
     def __reduce__(self):
         return (self.__class__, self._getstate())
 
-
-_date_class = date
-
-
 class time:
     """A time object represents a (local) time of day, independent of
     any particular day, and subject to adjustment via a tzinfo object.
@@ -735,6 +731,7 @@ class time:
         "_fold",
     )
 
+    # pylint: disable=redefined-outer-name
     def __new__(cls, hour=0, minute=0, second=0, microsecond=0, tzinfo=None, *, fold=0):
         _check_time_fields(hour, minute, second, microsecond, fold)
         # TODO: Impl. tzinfo checks
@@ -882,6 +879,7 @@ class time:
         off = self.utcoffset()
         if off is not None:
             if off.days < 0:
+                # TODO: UTCOFFSET Comparison unary
                 sign = "-"
                 off = -off
             else:
@@ -978,6 +976,7 @@ class datetime(date):
 
     """
 
+    # pylint: disable=redefined-outer-name
     def __new__(
         cls,
         year,
@@ -1066,11 +1065,10 @@ class datetime(date):
         tm_struct = _time.localtime(timestamp)
         return cls(tm_struct[0], tm_struct[1], tm_struct[2])
 
-    # NOTE: now() is preferred over today() and utcnow()
     @classmethod
-    def now(cls, tz=None):
+    def now(cls):
         """Return the current local date and time."""
-        return cls.fromtimestamp(_time.time(), tz)
+        return cls.fromtimestamp(_time.time())
 
     @classmethod
     def utcfromtimestamp(cls, timestamp):
@@ -1104,6 +1102,7 @@ class datetime(date):
 
     def timetuple(self):
         """Return local time tuple compatible with time.localtime()."""
+        # TODO: Implement dst() method
         dst = self.dst()
         if dst is None:
             dst = -1
@@ -1180,6 +1179,7 @@ class datetime(date):
             otoff = other.utcoffset()
             # Assume that allow_mixed means that we are called from __eq__
             if allow_mixed:
+                # TODO This requires a REPLACE METHOD! to be implemented in datetime
                 if myoff != self.replace(fold=not self._fold).utcoffset():
                     return 2
                 if otoff != other.replace(fold=not other.fold).utcoffset():
@@ -1211,11 +1211,10 @@ class datetime(date):
             if not allow_mixed:
                 raise TypeError("cannot compare naive and aware datetimes")
             return 2  # arbitrary non-zero value
-        # XXX What follows could be done more efficiently...
         diff = self - other  # this will take offsets into account
         if diff.days < 0:
             return -1
-        return diff and 1 or 0
+        return 1 if diff else 0
 
     def __add__(self, other):
         "Add a datetime and a timedelta."
@@ -1232,6 +1231,7 @@ class datetime(date):
         hour, rem = divmod(delta.seconds, 3600)
         minute, second = divmod(rem, 60)
         if 0 < delta.days <= _MAXORDINAL:
+            # TODO: We need a datetime combine method
             return type(self).combine(
                 date.fromordinal(delta.days),
                 time(hour, minute, second, delta.microseconds, tzinfo=self._tzinfo),
@@ -1280,5 +1280,6 @@ class datetime(date):
 
 
 # TODO: This isn't right...
-# _EPOCH = datetime(1970, 1, 1)
+_EPOCH = datetime(1970, 1, 1)
+_date_class = date # so functions w/ args named "date" can get at the class
 _time_class = time  # so functions w/ args named "time" can get at the class
