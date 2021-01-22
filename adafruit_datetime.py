@@ -237,7 +237,7 @@ def _ymd2ord(year, month, day):
     assert 1 <= day <= dim, "day must be in 1..%d" % dim
     return _days_before_year(year) + _days_before_month(year, month) + day
 
-
+# pylint: disable=too-many-arguments
 def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_isdst):
     tm_wday = (_ymd2ord(tm_year, tm_month, tm_mday) + 6) % 7
     tm_yday = _days_before_month(tm_year, tm_month) + tm_mday
@@ -360,6 +360,7 @@ class timedelta:
 
     __slots__ = "_days", "_seconds", "_microseconds", "_hashcode"
 
+    # pylint: disable=too-many-arguments
     def __new__(
         cls,
         days=0,
@@ -478,7 +479,7 @@ class timedelta:
     def total_seconds(self):
         """Total seconds in the duration."""
         return (
-            (self.days * 86400 + self.seconds) * 10 ** 6 + self.microseconds
+            (self._days * 86400 + self._seconds) * 10 ** 6 + self._microseconds
         ) / 10 ** 6
 
     def __repr__(self):
@@ -527,13 +528,13 @@ class tzinfo:
 
     __slots__ = ()
 
-    def utcoffset(self, dt):
+    def utcoffset(dt):
         """Return offset of local time from UTC, as a timedelta object that is positive east of UTC. """
         raise NotImplementedError("tzinfo subclass must override utcoffset()")
 
-    def tzname(self, dt):
+    def tzname(dt):
         """Return the time zone name corresponding to the datetime object dt, as a string."""
-        raise NotImplemented("tzinfo subclass must override tzname()")
+        raise NotImplementedError("tzinfo subclass must override tzname()")
 
 
 class date:
@@ -582,18 +583,8 @@ class date:
         """Return the local date corresponding to the POSIX timestamp,
         such as is returned by time.time().
         """
-        (
-            tm_year,
-            tm_mon,
-            tm_mday,
-            tm_hour,
-            tm_min,
-            tm_sec,
-            tm_wday,
-            tm_yday,
-            tm_isdst,
-        ) = _time.localtime(t)
-        return cls(tm_year, tm_mon, tm_mday)
+        tm_struct = _time.localtime(t)
+        return cls(tm_struct[0], tm_struct[1], tm_struct[2])
 
     @classmethod
     def fromordinal(cls, ordinal):
