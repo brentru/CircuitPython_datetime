@@ -237,6 +237,7 @@ def _ymd2ord(year, month, day):
     assert 1 <= day <= dim, "day must be in 1..%d" % dim
     return _days_before_year(year) + _days_before_month(year, month) + day
 
+
 # pylint: disable=too-many-arguments
 def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_isdst):
     tm_wday = (_ymd2ord(tm_year, tm_month, tm_mday) + 6) % 7
@@ -254,6 +255,7 @@ def _build_struct_time(tm_year, tm_month, tm_mday, tm_hour, tm_min, tm_sec, tm_i
             tm_isdst,
         )
     )
+
 
 # pylint: disable=invalid-name
 def _format_time(hh, mm, ss, us, timespec="auto"):
@@ -346,12 +348,14 @@ def _ord2ymd(n):
 class timedelta:
     """A timedelta object represents a duration, the difference between two dates or times.
 
-    Only days, seconds and microseconds are stored internally. Arguments are converted to those units:
+    Only days, seconds and microseconds are stored internally.
+    Arguments are converted to those units:
         * A millisecond is converted to 1000 microseconds.
         * A minute is converted to 60 seconds.
         * An hour is converted to 3600 seconds.
         * A week is converted to 7 days.
-    and days, seconds and microseconds are then normalized so that the representation is unique, with
+    and days, seconds and microseconds are then normalized so that
+    the representation is unique, with:
         * 0 <= microseconds < 1000000
         * 0 <= seconds < 3600*24 (the number of seconds in one day)
         * -999999999 <= days <= 999999999
@@ -518,21 +522,24 @@ class timedelta:
         return timedelta(-self._days, -self._seconds, -self._microseconds)
 
 
+# pylint: disable=no-self-use
 class tzinfo:
     """This is an abstract base class, meaning that this class should not
     be instantiated directly. Define a subclass of tzinfo to capture information
     about a particular time zone.
-    An instance of (a concrete subclass of) tzinfo can be passed to the constructors for datetime and time objects. The latter objects view their attributes as being in local time, and the tzinfo object supports methods revealing offset of local time from UTC, the name of the time zone, and DST offset, all relative to a date or time object passed to them.
 
     """
 
     __slots__ = ()
 
-    def utcoffset(dt):
-        """Return offset of local time from UTC, as a timedelta object that is positive east of UTC. """
+    def utcoffset(self, dt):
+        """Return offset of local time from UTC, as a timedelta
+        object that is positive east of UTC.
+
+        """
         raise NotImplementedError("tzinfo subclass must override utcoffset()")
 
-    def tzname(dt):
+    def tzname(self, dt):
         """Return the time zone name corresponding to the datetime object dt, as a string."""
         raise NotImplementedError("tzinfo subclass must override tzname()")
 
@@ -686,7 +693,7 @@ class date:
     def _cmp(self, other):
         assert isinstance(other, date)
         y, m, d = self._year, self._month, self._day
-        y2, m2, d2 = other._year, other._month, other._day
+        y2, m2, d2 = other.year, other.month, other.day
         return _cmp((y, m, d), (y2, m2, d2))
 
     def __hash__(self):
@@ -800,7 +807,7 @@ class time:
     def _cmp(self, other, allow_mixed=False):
         assert isinstance(other, time)
         mytz = self._tzinfo
-        ottz = other._tzinfo
+        ottz = other.tzinfo
         myoff = otoff = None
 
         if mytz is ottz:
@@ -813,18 +820,17 @@ class time:
         if base_compare:
             return _cmp(
                 (self._hour, self._minute, self._second, self._microsecond),
-                (other._hour, other._minute, other._second, other._microsecond),
+                (other.hour, other.minute, other.second, other.microsecond),
             )
         if myoff is None or otoff is None:
-            if allow_mixed:
-                return 2  # arbitrary non-zero value
-            else:
+            if not allow_mixed:
                 raise TypeError("cannot compare naive and aware times")
+            return 2  # arbitrary non-zero value
         myhhmm = self._hour * 60 + self._minute - myoff // timedelta(minutes=1)
-        othhmm = other._hour * 60 + other._minute - otoff // timedelta(minutes=1)
+        othhmm = other.hour * 60 + other.minute - otoff // timedelta(minutes=1)
         return _cmp(
             (myhhmm, self._second, self._microsecond),
-            (othhmm, other._second, other._microsecond),
+            (othhmm, other.second, other.microsecond),
         )
 
     # from CPython
@@ -832,10 +838,7 @@ class time:
     def __hash__(self):
         """Hash."""
         if self._hashcode == -1:
-            if self._fold:
-                t = self.replace(fold=0)
-            else:
-                t = self
+            t = self
             tzoff = t.utcoffset()
             if not tzoff:  # zero or None
                 self._hashcode = hash(t._getstate()[0])
@@ -851,10 +854,6 @@ class time:
                 else:
                     self._hashcode = hash((h, m, self.second, self.microsecond))
         return self._hashcode
-
-    # Instance methods
-    def replace():
-        raise NotImplementedError
 
     def isoformat(self, timespec="auto"):
         """Return a string representing the time in ISO 8601 format, one of:
@@ -958,9 +957,6 @@ class time:
         _check_tzname(name)
         return name
 
-    def dst():
-        raise NotImplementedError()
-
     # Pickle support
     def _getstate(self, protocol=3):
         us2, us3 = divmod(self._microsecond, 256)
@@ -969,19 +965,16 @@ class time:
         if self._fold and protocol > 3:
             h += 128
         basestate = bytes([h, self._minute, self._second, us1, us2, us3])
-        if self._tzinfo is None:
-            return (basestate,)
-        else:
+        if not self._tzinfo is None:
             return (basestate, self._tzinfo)
-
-
-# todo: move to bottom?
-_time_class = time  # so functions w/ args named "time" can get at the class
+        return (basestate,)
 
 
 class datetime(date):
-    """A datetime object is a single object containing all the information from a date object and a time object.
-    Like a date object, datetime assumes the current Gregorian calendar extended in both directions; like a time object, datetime assumes there are exactly 3600*24 seconds in every day.
+    """A datetime object is a single object containing all the information
+    from a date object and a time object. Like a date object, datetime assumes
+    the current Gregorian calendar extended in both directions; like a time object,
+    datetime assumes there are exactly 3600*24 seconds in every day.
 
     """
 
@@ -1070,8 +1063,8 @@ class datetime(date):
         and the returned datetime object is naive.
 
         """
-        y, m, d, hh, mm, ss, weekday, jday, dst = _time.localtime(timestamp)
-        return cls(y, m, d)
+        tm_struct = _time.localtime(timestamp)
+        return cls(tm_struct[0], tm_struct[1], tm_struct[2])
 
     # NOTE: now() is preferred over today() and utcnow()
     @classmethod
@@ -1111,8 +1104,6 @@ class datetime(date):
 
     def timetuple(self):
         """Return local time tuple compatible with time.localtime()."""
-        # TODO: Requires tzinfo and dst()
-        raise NotImplementedError
         dst = self.dst()
         if dst is None:
             dst = -1
@@ -1290,3 +1281,4 @@ class datetime(date):
 
 # TODO: This isn't right...
 # _EPOCH = datetime(1970, 1, 1)
+_time_class = time  # so functions w/ args named "time" can get at the class
