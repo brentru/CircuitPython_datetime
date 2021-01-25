@@ -68,6 +68,7 @@ def _check_time_fields(hour, minute, second, microsecond, fold):
     if fold not in (0, 1):  # from CPython API
         raise ValueError("fold must be either 0 or 1", fold)
 
+
 def _check_tzinfo_arg(time_zone):
     if time_zone is not None and not isinstance(time_zone, tzinfo):
         raise TypeError("tzinfo argument must be None or of a tzinfo subclass")
@@ -92,6 +93,7 @@ def _check_utc_offset(name, offset):
             "%s()=%s, must be must be strictly between"
             " -timedelta(hours=24) and timedelta(hours=24)" % (name, offset)
         )
+
 
 # pylint: disable=invalid-name
 def _format_offset(off):
@@ -625,6 +627,7 @@ class timedelta:
             _cmperror(self, other)
         return self._cmp(other) > 0
 
+    # pylint: disable=no-self-use, protected-access
     def _cmp(self, other):
         assert isinstance(other, timedelta)
         return _cmp(self._getstate(), other._getstate())
@@ -830,6 +833,7 @@ class timezone(tzinfo):
     have been made to civil time.
 
     """
+
     # Sentinel value to disallow None
     _Omitted = object()
 
@@ -842,7 +846,7 @@ class timezone(tzinfo):
             name = None
         elif not isinstance(name, str):
             raise TypeError("name must be a string")
-        if not cls._minoffset <= offset <= cls._maxoffset:
+        if not cls.minoffset <= offset <= cls.maxoffset:
             raise ValueError(
                 "offset must be a timedelta"
                 " strictly between -timedelta(hours=24) and"
@@ -854,8 +858,10 @@ class timezone(tzinfo):
             )
         return cls._create(offset, name)
 
+    # pylint: disable=protected-access
     @classmethod
     def _create(cls, offset, name=None):
+        """High-level creation for a timezone object."""
         self = tzinfo.__new__(cls)
         self._offset = offset
         self._name = name
@@ -907,8 +913,8 @@ class timezone(tzinfo):
         minutes = rest // timedelta(minutes=1)
         return "UTC{}{:02d}:{:02d}".format(sign, hours, minutes)
 
-    _maxoffset = timedelta(hours=23, minutes=59)
-    _minoffset = -_maxoffset
+    maxoffset = timedelta(hours=23, minutes=59)
+    minoffset = -maxoffset
 
 
 class time:
@@ -1249,6 +1255,8 @@ class datetime(date):
         return self._tzinfo
 
     # Class methods
+
+    # pylint: disable=protected-access
     @classmethod
     def _fromtimestamp(cls, t, utc, tz):
         """Construct a datetime from a POSIX timestamp (like time.time()).
@@ -1266,8 +1274,16 @@ class datetime(date):
         converter = _time.gmtime if utc else _time.localtime
         struct_time = converter(t)
         ss = min(struct_time[5], 59)  # clamp out leap seconds if the platform has them
-        result = cls(struct_time[0], struct_time[1], struct_time[2],
-                     struct_time[3], struct_time[4], ss, us, tz)
+        result = cls(
+            struct_time[0],
+            struct_time[1],
+            struct_time[2],
+            struct_time[3],
+            struct_time[4],
+            ss,
+            us,
+            tz,
+        )
         if tz is None:
             # As of version 2015f max fold in IANA database is
             # 23 hours at 1969-09-30 13:00:00 in Kwajalein.
@@ -1275,13 +1291,29 @@ class datetime(date):
             max_fold_seconds = 24 * 3600
 
             struct_time = converter(t - max_fold_seconds)[:6]
-            probe1 = cls(struct_time[0], struct_time[1], struct_time[2],
-                         struct_time[3], struct_time[4], struct_time[5], us, tz)
+            probe1 = cls(
+                struct_time[0],
+                struct_time[1],
+                struct_time[2],
+                struct_time[3],
+                struct_time[4],
+                struct_time[5],
+                us,
+                tz,
+            )
             trans = result - probe1 - timedelta(0, max_fold_seconds)
             if trans.days < 0:
                 struct_time = converter(t + trans // timedelta(0, 1))[:6]
-                probe2 = cls(struct_time[0], struct_time[1], struct_time[2],
-                         struct_time[3], struct_time[4], struct_time[5], us, tz)
+                probe2 = cls(
+                    struct_time[0],
+                    struct_time[1],
+                    struct_time[2],
+                    struct_time[3],
+                    struct_time[4],
+                    struct_time[5],
+                    us,
+                    tz,
+                )
                 if probe2 == result:
                     result._fold = 1
         else:
@@ -1679,9 +1711,11 @@ class datetime(date):
             return (basestate, self._tzinfo)
         return (basestate,)
 
+# Module exports
+# pylint: disable=protected-access
 timezone.utc = timezone._create(timedelta(0))
-timezone.min = timezone._create(timezone._minoffset)
-timezone.max = timezone._create(timezone._maxoffset)
+timezone.min = timezone._create(timezone.minoffset)
+timezone.max = timezone._create(timezone.maxoffset)
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
-_date_class = date  # so functions w/ args named "date" can get at the class
-_time_class = time  # so functions w/ args named "time" can get at the class
+_date_class = date
+_time_class = time
