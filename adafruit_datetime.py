@@ -95,6 +95,23 @@ def _check_utc_offset(name, offset):
             " -timedelta(hours=24) and timedelta(hours=24)" % (name, offset)
         )
 
+def _format_offset(off):
+    s = ''
+    if off is not None:
+        if off.days < 0:
+            sign = "-"
+            off = -off
+        else:
+            sign = "+"
+        hh, mm = divmod(off, timedelta(hours=1))
+        mm, ss = divmod(mm, timedelta(minutes=1))
+        s += "%s%02d:%02d" % (sign, hh, mm)
+        if ss or ss.microseconds:
+            s += ":%02d" % ss.seconds
+
+            if ss.microseconds:
+                s += '.%06d' % ss.microseconds
+    return s
 
 # pylint: disable=invalid-name, too-many-locals, too-many-nested-blocks, too-many-branches, too-many-statements
 def _wrap_strftime(time_obj, strftime_fmt, timetuple):
@@ -543,6 +560,20 @@ class timedelta:
         return NotImplemented
 
     __radd__ = __add__
+
+    def __sub__(self, other):
+        if isinstance(other, timedelta):
+            # for CPython compatibility, we cannot use
+            # our __class__ here, but need a real timedelta
+            return timedelta(self._days - other._days,
+                             self._seconds - other._seconds,
+                             self._microseconds - other._microseconds)
+        return NotImplemented
+
+    def __rsub__(self, other):
+        if isinstance(other, timedelta):
+            return -self + other
+        return NotImplemented
 
     def _to_microseconds(self):
         return ((self._days * (24*3600) + self._seconds) * 1000000 +
@@ -1114,33 +1145,45 @@ class datetime:
     # Class methods
 
     @classmethod
-    def fromtimestamp(cls, timestamp, tz=None):
-        """Return the local date and time corresponding to the POSIX timestamp,
-        such as is returned by time.time(). If optional argument tz is None or not
-        specified, the timestamp is converted to the platform’s local date and time,
-        and the returned datetime object is naive.
-
+    def _fromtimestamp(cls, t, utc, tz):
+        """Construct a datetime from a POSIX timestamp (like time.time()).
+        A timezone info object may be passed in as well.
         """
-        #_check_tzinfo_arg(tz)
+        frac, t = _math.modf(t)
+        us = round(frac * 1e6)
+        if us >= 1000000:
+            t += 1
+            us -= 1000000
+        elif us < 0:
+            t -= 1
+            us += 1000000
 
-        converter = _time.localtime if tz is None else _time.gmtime
-
-        timestamp, frac = divmod(timestamp, 1.0)
-        us = int(frac * 1e6)
-
-        # If timestamp is less than one microsecond smaller than a
-        # full second, us can be rounded up to 1000000.  In this case,
-        # roll over to seconds, otherwise, ValueError is raised
-        # by the constructor.
-        if us == 1000000:
-            timestamp += 1
-            us = 0
-        y, m, d, hh, mm, ss, weekday, jday, dst = converter(timestamp)
+        converter = _time.gmtime if utc else _time.localtime
+        y, m, d, hh, mm, ss, weekday, jday, dst = converter(t)
         ss = min(ss, 59)    # clamp out leap seconds if the platform has them
         result = cls(y, m, d, hh, mm, ss, us, tz)
-        if tz is not None:
+        if tz is None:
+            # As of version 2015f max fold in IANA database is
+            # 23 hours at 1969-09-30 13:00:00 in Kwajalein.
+            # Let's probe 24 hours in the past to detect a transition:
+            max_fold_seconds = 24 * 3600
+
+
+            y, m, d, hh, mm, ss = converter(t - max_fold_seconds)[:6]
+            probe1 = cls(y, m, d, hh, mm, ss, us, tz)
+            trans = result - probe1 - timedelta(0, max_fold_seconds)
+            if trans.days < 0:
+                y, m, d, hh, mm, ss = converter(t + trans // timedelta(0, 1))[:6]
+                probe2 = cls(y, m, d, hh, mm, ss, us, tz)
+                if probe2 == result:
+                    result._fold = 1
+        else:
             result = tz.fromutc(result)
         return result
+
+    @classmethod
+    def fromtimestamp(cls, timestamp, tz=None):
+        return cls._fromtimestamp(timestamp, tz is not None, tz)
 
     @classmethod
     def now(cls):
@@ -1150,19 +1193,7 @@ class datetime:
     @classmethod
     def utcfromtimestamp(cls, timestamp):
         """Return the UTC datetime corresponding to the POSIX timestamp, with tzinfo None"""
-        timestamp, frac = divmod(timestamp, 1.0)
-        us = int(frac * 1e6)
-
-        # If timestamp is less than one microsecond smaller than a
-        # full second, us can be rounded up to 1000000.  In this case,
-        # roll over to seconds, otherwise, ValueError is raised
-        # by the constructor.
-        if us == 1000000:
-            timestamp += 1
-            us = 0
-        y, m, d, hh, mm, ss, weekday, jday, dst = _time.gmtime(timestamp)
-        ss = min(ss, 59)    # clamp out leap seconds if the platform has them
-        return cls(y, m, d, hh, mm, ss, us)
+        return cls._fromtimestamp(timestamp, True, None)
 
 
     # from CPython
@@ -1279,7 +1310,6 @@ class datetime:
     def utcoffset(self):
         if self._tzinfo is None:
             return None
-        print('tz: ' , self._tzinfo)
         offset = self._tzinfo.utcoffset(self)
         _check_utc_offset("utcoffset", offset)
         return offset
@@ -1302,6 +1332,22 @@ class datetime:
     def isoweekday(self):
         """Return the day of the week as an integer, where Monday is 1 and Sunday is 7. """
         return self.toordinal() % 7 or 7
+
+    def isoformat(self, sep='T', timespec='auto'):
+        """Return a string representing the date and time in
+        ISO8601 format.
+
+        """
+        s = ("%04d-%02d-%02d%c" % (self._year, self._month, self._day, sep) +
+             _format_time(self._hour, self._minute, self._second,
+                          self._microsecond, timespec))
+
+        off = self.utcoffset()
+        tz = _format_offset(off)
+        if tz:
+            s += tz
+
+        return s
 
     def replace(
         self,

@@ -199,6 +199,7 @@ class TestDateTime(TestDate):
             with self.subTest(tzi=tzi):
                 assert dt.isoformat() == exp
 
+    @unittest.skip("strftime not implemented in datetime")
     def test_format(self):
         dt = self.theclass(2007, 9, 10, 4, 5, 1, 123)
         self.assertEqual(dt.__format__(''), str(dt))
