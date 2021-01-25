@@ -68,9 +68,8 @@ def _check_time_fields(hour, minute, second, microsecond, fold):
     if fold not in (0, 1):  # from CPython API
         raise ValueError("fold must be either 0 or 1", fold)
 
-
-def _check_tzinfo_arg(timezone):
-    if timezone is not None and not isinstance(timezone, tzinfo):
+def _check_tzinfo_arg(time_zone):
+    if time_zone is not None and not isinstance(time_zone, tzinfo):
         raise TypeError("tzinfo argument must be None or of a tzinfo subclass")
 
 
@@ -94,7 +93,7 @@ def _check_utc_offset(name, offset):
             " -timedelta(hours=24) and timedelta(hours=24)" % (name, offset)
         )
 
-
+# pylint: disable=invalid-name
 def _format_offset(off):
     s = ""
     if off is not None:
@@ -498,20 +497,24 @@ class timedelta:
         self._hashcode = -1
         return self
 
+    # Read-only properties
     @property
     def days(self):
+        """Days"""
         return self._days
 
     @property
     def seconds(self):
+        """Seconds"""
         return self._seconds
 
     @property
     def microseconds(self):
+        """Microseconds"""
         return self._microseconds
 
     def total_seconds(self):
-        """Total seconds in the duration."""
+        """Return the total number of seconds contained in the duration."""
         return (
             (self._days * 86400 + self._seconds) * 10 ** 6 + self._microseconds
         ) / 10 ** 6
@@ -576,8 +579,7 @@ class timedelta:
         usec = self._to_microseconds()
         if isinstance(other, timedelta):
             return usec // other._to_microseconds()
-        if isinstance(other, int):
-            return timedelta(0, 0, usec // other)
+        return timedelta(0, 0, usec // other)
 
     def __mod__(self, other):
         if isinstance(other, timedelta):
@@ -594,40 +596,34 @@ class timedelta:
     # Comparisons of timedelta objects with other.
 
     def __eq__(self, other):
-        if isinstance(other, timedelta):
-            return self._cmp(other) == 0
-        else:
+        if not isinstance(other, timedelta):
             return False
+        return self._cmp(other) == 0
 
     def __ne__(self, other):
-        if isinstance(other, timedelta):
-            return self._cmp(other) != 0
-        else:
+        if not isinstance(other, timedelta):
             return True
+        return self._cmp(other) != 0
 
     def __le__(self, other):
-        if isinstance(other, timedelta):
-            return self._cmp(other) <= 0
-        else:
+        if not isinstance(other, timedelta):
             _cmperror(self, other)
+        return self._cmp(other) <= 0
 
     def __lt__(self, other):
-        if isinstance(other, timedelta):
-            return self._cmp(other) < 0
-        else:
+        if not isinstance(other, timedelta):
             _cmperror(self, other)
+        return self._cmp(other) < 0
 
     def __ge__(self, other):
-        if isinstance(other, timedelta):
-            return self._cmp(other) >= 0
-        else:
+        if not isinstance(other, timedelta):
             _cmperror(self, other)
+        return self._cmp(other) >= 0
 
     def __gt__(self, other):
-        if isinstance(other, timedelta):
-            return self._cmp(other) > 0
-        else:
+        if not isinstance(other, timedelta):
             _cmperror(self, other)
+        return self._cmp(other) > 0
 
     def _cmp(self, other):
         assert isinstance(other, timedelta)
@@ -826,8 +822,14 @@ class date:
 
 
 class timezone(tzinfo):
-    __slots__ = "_offset", "_name"
+    """The timezone class is a subclass of tzinfo, each instance of which represents a
+    timezone defined by a fixed offset from UTC.
 
+    Objects of this class cannot be used to represent timezone information in the locations
+    where different offsets are used in different days of the year or where historical changes
+    have been made to civil time.
+
+    """
     # Sentinel value to disallow None
     _Omitted = object()
 
@@ -1605,7 +1607,6 @@ class datetime(date):
         hour, rem = divmod(delta._seconds, 3600)
         minute, second = divmod(rem, 60)
         if 0 < delta._days <= _MAXORDINAL:
-            # TODO: We need a datetime combine method
             return type(self).combine(
                 date.fromordinal(delta._days),
                 time(hour, minute, second, delta._microseconds, tzinfo=self._tzinfo),
