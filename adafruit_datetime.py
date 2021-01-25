@@ -69,10 +69,8 @@ def _check_time_fields(hour, minute, second, microsecond, fold):
         raise ValueError("fold must be either 0 or 1", fold)
 
 def _check_tzinfo_arg(timezone):
-    print(timezone)
-    pass
-    #if timezone is not None and not isinstance(timezone, tzinfo):
-    #        raise TypeError("tzinfo argument must be None or of a tzinfo subclass")
+    if timezone is not None and not isinstance(timezone, tzinfo):
+            raise TypeError("tzinfo argument must be None or of a tzinfo subclass")
 
 # name is the offset-producing method, "utcoffset" or "dst".
 # offset is what it returned.
@@ -806,14 +804,25 @@ class timezone(tzinfo):
     which represents a timezone defined by a fixed offset from UTC.
 
     """
-    def __new__(cls, offset, name=None):
+    # Sentinel value to disallow None
+    _Omitted = object()
+    def __new__(cls, offset, name=_Omitted):
         if not isinstance(offset, timedelta):
-            raise TypeError("Offset must be a timedelta")
-        if name is None:
+            raise TypeError("offset must be a timedelta")
+        if name is cls._Omitted:
             if not offset:
                 return cls.utc
+            name = None
         elif not isinstance(name, str):
-            raise TypeError("Name must be a string")
+            raise TypeError("name must be a string")
+        if not cls._minoffset <= offset <= cls._maxoffset:
+            raise ValueError("offset must be a timedelta"
+                             " strictly between -timedelta(hours=24) and"
+                             " timedelta(hours=24).")
+        if (offset.microseconds != 0 or
+            offset.seconds % 60 != 0):
+            raise ValueError("offset must be a timedelta"
+                             " representing a whole number of minutes")
         return cls._create(offset, name)
 
     @classmethod
@@ -1224,7 +1233,6 @@ class datetime:
         return self._tzinfo
 
     # Class methods
-
     @classmethod
     def _fromtimestamp(cls, t, utc, tz):
         """Construct a datetime from a POSIX timestamp (like time.time()).
@@ -1267,27 +1275,14 @@ class datetime:
         return cls._fromtimestamp(timestamp, tz is not None, tz)
 
     @classmethod
-    def now(cls):
+    def now(cls, timezone):
         """Return the current local date and time."""
-        return cls.fromtimestamp(_time.time())
+        return cls.fromtimestamp(_time.time(), timezone)
 
     @classmethod
     def utcfromtimestamp(cls, timestamp):
         """Return the UTC datetime corresponding to the POSIX timestamp, with tzinfo None"""
         return cls._fromtimestamp(timestamp, True, None)
-
-
-    # from CPython
-    # https://github.com/python/cpython/blob/master/Lib/datetime.py
-    @classmethod
-    def fromisoformat(cls, date_string):
-        """Return a datetime corresponding to a date_string in one of the
-        formats emitted by date.isoformat() and datetime.isoformat().
-        :param str date_string: ISO-formatted date or datetime string.
-
-        """
-        # TODO!
-        pass
 
     @classmethod
     def combine(cls, date, time, tzinfo=True):
@@ -1398,6 +1393,7 @@ class datetime:
         if self._tzinfo is None:
             return None
         offset = self._tzinfo.utcoffset(self)
+        print(offset)
         _check_utc_offset("utcoffset", offset)
         return offset
 
@@ -1419,6 +1415,25 @@ class datetime:
     def isoweekday(self):
         """Return the day of the week as an integer, where Monday is 1 and Sunday is 7. """
         return self.toordinal() % 7 or 7
+
+    def __repr__(self):
+        """Convert to formal string, for repr()."""
+        L = [self._year, self._month, self._day, # These are never zero
+             self._hour, self._minute, self._second, self._microsecond]
+        if L[-1] == 0:
+            del L[-1]
+        if L[-1] == 0:
+            del L[-1]
+        s = ", ".join(map(str, L))
+        s = "%s(%s)" % ('datetime.' + self.__class__.__name__, s)
+        if self._tzinfo is not None:
+            assert s[-1:] == ")"
+            s = s[:-1] + ", tzinfo=%r" % self._tzinfo + ")"
+        return s
+
+    def __str__(self):
+        "Convert to string, for str()."
+        return self.isoformat(sep=' ')
 
     def isoformat(self, sep='T', timespec='auto'):
         """Return a string representing the date and time in
@@ -1660,9 +1675,6 @@ class datetime:
 timezone.utc = timezone._create(timedelta(0))
 timezone.min = timezone._create(timezone._minoffset)
 timezone.max = timezone._create(timezone._maxoffset)
-
-_maxoffset = timedelta(hours=24, microseconds=-1)
-_minoffset = -_maxoffset
 _EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
 _date_class = date  # so functions w/ args named "date" can get at the class
 _time_class = time  # so functions w/ args named "time" can get at the class
