@@ -480,6 +480,18 @@ class timedelta:
         self._hashcode = -1
         return self
 
+    @property
+    def days(self):
+        return self._days
+
+    @property
+    def seconds(self):
+        return self._seconds
+
+    @property
+    def microseconds(self):
+        return self._microseconds
+
     def total_seconds(self):
         """Total seconds in the duration."""
         return (
@@ -577,9 +589,6 @@ class tzinfo:
     about a particular time zone.
 
     """
-
-    __slots__ = ()
-
     def utcoffset(self, dt):
         """Return offset of local time from UTC, as a timedelta
         object that is positive east of UTC.
@@ -1270,6 +1279,7 @@ class datetime:
     def utcoffset(self):
         if self._tzinfo is None:
             return None
+        print('tz: ' , self._tzinfo)
         offset = self._tzinfo.utcoffset(self)
         _check_utc_offset("utcoffset", offset)
         return offset
@@ -1455,6 +1465,25 @@ class datetime:
         if myoff is None or otoff is None:
             raise TypeError("cannot mix naive and timezone-aware time")
         return base + otoff - myoff
+
+    def __repr__(self):
+        """Convert to formal string, for repr()."""
+        L = [self._year, self._month, self._day, # These are never zero
+             self._hour, self._minute, self._second, self._microsecond]
+        if L[-1] == 0:
+            del L[-1]
+        if L[-1] == 0:
+            del L[-1]
+        s = ", ".join(map(str, L))
+        s = "%s(%s)" % ('datetime.' + self.__class__.__name__, s)
+        if self._tzinfo is not None:
+            assert s[-1:] == ")"
+            s = s[:-1] + ", tzinfo=%r" % self._tzinfo + ")"
+        return s
+
+    def __str__(self):
+        "Convert to string, for str()."
+        return self.isoformat(sep=' ')
 
     def __hash__(self):
         if self._hashcode == -1:

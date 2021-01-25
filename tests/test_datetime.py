@@ -540,7 +540,6 @@ class TestDateTime(TestDate):
                 self.assertEqual(minus_one.microsecond, 999999)
 
                 t = fts(-1e-8)
-                print(t, zero)
                 self.assertEqual(t, zero)
                 t = fts(-9e-7)
                 self.assertEqual(t, minus_one)
