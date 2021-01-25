@@ -538,33 +538,20 @@ class timedelta:
         return s
 
     def __neg__(self):
-        # for CPython compatibility, we cannot use
-        # our __class__ here, but need a real timedelta
         return timedelta(-self._days, -self._seconds, -self._microseconds)
 
     def __add__(self, other):
         if isinstance(other, timedelta):
-            # for CPython compatibility, we cannot use
-            # our __class__ here, but need a real timedelta
             return timedelta(self._days + other._days,
                              self._seconds + other._seconds,
                              self._microseconds + other._microseconds)
         return NotImplemented
 
-    __radd__ = __add__
-
     def __sub__(self, other):
         if isinstance(other, timedelta):
-            # for CPython compatibility, we cannot use
-            # our __class__ here, but need a real timedelta
             return timedelta(self._days - other._days,
                              self._seconds - other._seconds,
                              self._microseconds - other._microseconds)
-        return NotImplemented
-
-    def __rsub__(self, other):
-        if isinstance(other, timedelta):
-            return -self + other
         return NotImplemented
 
     def _to_microseconds(self):
@@ -579,18 +566,6 @@ class timedelta:
             return usec // other._to_microseconds()
         if isinstance(other, int):
             return timedelta(0, 0, usec // other)
-
-    def __truediv__(self, other):
-        if not isinstance(other, (int, float, timedelta)):
-            return NotImplemented
-        usec = self._to_microseconds()
-        if isinstance(other, timedelta):
-            return usec / other._to_microseconds()
-        if isinstance(other, int):
-            return timedelta(0, 0, _divide_and_round(usec, other))
-        if isinstance(other, float):
-            a, b = other.as_integer_ratio()
-            return timedelta(0, 0, _divide_and_round(b * usec, a))
 
     def __mod__(self, other):
         if isinstance(other, timedelta):
@@ -647,9 +622,6 @@ class timedelta:
     def _cmp(self, other):
         assert isinstance(other, timedelta)
         return _cmp(self._getstate(), other._getstate())
-
-    def __hash__(self):
-        return hash(self._getstate())
 
     def __bool__(self):
         return (self._days != 0 or
