@@ -595,6 +595,22 @@ class timedelta:
             return q, timedelta(0, 0, r)
         return NotImplemented
 
+    def __mul__(self, other):
+        if isinstance(other, int):
+            # for CPython compatibility, we cannot use
+            # our __class__ here, but need a real timedelta
+            return timedelta(self._days * other,
+                             self._seconds * other,
+                             self._microseconds * other)
+        if isinstance(other, float):
+            #a, b = other.as_integer_ratio()
+            #return self * a / b
+            usec = self._to_microseconds()
+            return timedelta(0, 0, round(usec * other))
+        return NotImplemented
+
+    __rmul__ = __mul__
+
     # Comparisons of timedelta objects with other.
 
     def __eq__(self, other):
