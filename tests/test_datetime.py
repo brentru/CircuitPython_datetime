@@ -13,6 +13,7 @@ from adafruit_datetime import timedelta
 from adafruit_datetime import tzinfo
 from adafruit_datetime import date
 from adafruit_datetime import time
+from adafruit_datetime import timezone
 
 # TZinfo test
 class FixedOffset(tzinfo):
@@ -841,9 +842,8 @@ class TestDateTime(TestDate):
         base = cls(2000, 2, 29)
         self.assertRaises(ValueError, base.replace, year=2001)
 
-    #TODO
+    @unittest.skip("astimezone not impld")
     @support.run_with_tz('EDT4')
-    @unittest.skip("timezone not implemented yet")
     def test_astimezone(self):
         dt = self.theclass.now()
         f = FixedOffset(44, "0044")
@@ -875,7 +875,6 @@ class TestDateTime(TestDate):
         dt_broken = dt.replace(tzinfo=broken)
         with self.assertRaises(TypeError):
             dt_broken.astimezone()
-
 
     def test_subclass_datetime(self):
 
