@@ -41,6 +41,10 @@ _DI4Y = const(1461)
 # https://svn.python.org/projects/sandbox/trunk/datetime/datetime.py
 _DAYS_IN_MONTH = (None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 _DAYS_BEFORE_MONTH = (None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
+# Month and day names.  For localized versions, see the calendar module.
+_MONTHNAMES = (None, "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_DAYNAMES = (None, "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
 # universally shared
 def _cmp(obj_x, obj_y):
@@ -599,12 +603,12 @@ class timedelta:
         if isinstance(other, int):
             # for CPython compatibility, we cannot use
             # our __class__ here, but need a real timedelta
-            return timedelta(self._days * other,
-                             self._seconds * other,
-                             self._microseconds * other)
+            return timedelta(
+                self._days * other, self._seconds * other, self._microseconds * other
+            )
         if isinstance(other, float):
-            #a, b = other.as_integer_ratio()
-            #return self * a / b
+            # a, b = other.as_integer_ratio()
+            # return self * a / b
             usec = self._to_microseconds()
             return timedelta(0, 0, round(usec * other))
         return NotImplemented
@@ -673,6 +677,18 @@ class tzinfo:
     def tzname(self, dt):
         """Return the time zone name corresponding to the datetime object dt, as a string."""
         raise NotImplementedError("tzinfo subclass must override tzname()")
+
+    def fromutc(self, dt):
+        "datetime in UTC -> datetime in local time."
+
+        if not isinstance(dt, datetime):
+            raise TypeError("fromutc() requires a datetime argument")
+        if dt.tzinfo is not self:
+            raise ValueError("dt.tzinfo is not self")
+
+        dtoff = dt.utcoffset()
+        if dtoff is None:
+            raise ValueError("fromutc() requires a non-None utcoffset() " "result")
 
 
 class date:
@@ -986,11 +1002,16 @@ class time:
         return self._microsecond
 
     @property
+    def fold(self):
+        """Fold."""
+        return self._fold
+
+    @property
     def tzinfo(self):
         """The object passed as the tzinfo argument to
         the time constructor, or None if none was passed.
         """
-        return self._microsecond
+        return self._tzinfo
 
     # Standard conversions and comparisons
     # From CPython, https://github.com/python/cpython/blob/master/Lib/datetime.py
@@ -1097,7 +1118,6 @@ class time:
         off = self.utcoffset()
         if off is not None:
             if off.days < 0:
-                # TODO: UTCOFFSET Comparison unary
                 sign = "-"
                 off = -off
             else:
@@ -1478,6 +1498,23 @@ class datetime(date):
         """Return the day of the week as an integer, where Monday is 0 and Sunday is 6."""
         return (self.toordinal() + 6) % 7
 
+
+    def strftime(self, fmt):
+        """Format using strftime().  The date part of the timestamp passed
+        to underlying strftime should not be used.
+        """
+        # The year must be >= 1000 else Python's strftime implementation
+        # can raise a bogus exception.
+        timetuple = (1900, 1, 1,
+                     self._hour, self._minute, self._second,
+                     0, 1, -1)
+        return _wrap_strftime(self, fmt, timetuple)
+
+    def __format__(self, fmt):
+        if len(fmt) != 0:
+            return self.strftime(fmt)
+        return str(self)
+
     def __repr__(self):
         """Convert to formal string, for repr()."""
         L = [
@@ -1726,6 +1763,7 @@ class datetime(date):
         if not self._tzinfo is None:
             return (basestate, self._tzinfo)
         return (basestate,)
+
 
 # Module exports
 # pylint: disable=protected-access
