@@ -72,31 +72,21 @@ def _check_tzinfo_arg(timezone):
     if timezone is not None and not isinstance(timezone, tzinfo):
             raise TypeError("tzinfo argument must be None or of a tzinfo subclass")
 
-# name is the offset-producing method, "utcoffset" or "dst".
-# offset is what it returned.
-# If offset isn't None or timedelta, raises TypeError.
-# If offset is None, returns None.
-# Else offset is checked for being in range, and a whole # of minutes.
-# If it is, its integer value is returned.  Else ValueError is raised.
 def _check_utc_offset(name, offset):
     assert name in ("utcoffset", "dst")
+    print(offset)
     if offset is None:
         return
     if not isinstance(offset, timedelta):
-        raise TypeError(
-            "tzinfo.%s() must return None "
-            "or timedelta, not '%s'" % (name, type(offset))
-        )
+        raise TypeError("tzinfo.%s() must return None "
+                        "or timedelta, not '%s'" % (name, type(offset)))
     if offset % timedelta(minutes=1) or offset.microseconds:
-        raise ValueError(
-            "tzinfo.%s() must return a whole number "
-            "of minutes, got %s" % (name, offset)
-        )
+        raise ValueError("tzinfo.%s() must return a whole number "
+                         "of minutes, got %s" % (name, offset))
     if not -timedelta(1) < offset < timedelta(1):
-        raise ValueError(
-            "%s()=%s, must be must be strictly between"
-            " -timedelta(hours=24) and timedelta(hours=24)" % (name, offset)
-        )
+        raise ValueError("%s()=%s, must be must be strictly between"
+                         " -timedelta(hours=24) and timedelta(hours=24)"
+                         % (name, offset))
 
 def _format_offset(off):
     s = ''
@@ -892,8 +882,20 @@ class timezone(tzinfo):
         raise TypeError("fromutc() argument must be a datetime instance"
                         " or None")
 
+    @staticmethod
+    def _name_from_offset(delta):
+        if delta < timedelta(0):
+            sign = '-'
+            delta = -delta
+        else:
+            sign = '+'
+        hours, rest = divmod(delta, timedelta(hours=1))
+        minutes = rest // timedelta(minutes=1)
+        return 'UTC{}{:02d}:{:02d}'.format(sign, hours, minutes)
+
     _maxoffset = timedelta(hours=23, minutes=59)
     _minoffset = -_maxoffset
+
 
 class time:
     """A time object represents a (local) time of day, independent of
@@ -1149,7 +1151,7 @@ class time:
 
 
 # pylint: disable=too-many-instance-attributes
-class datetime:
+class datetime(date):
     """A datetime object is a single object containing all the information
     from a date object and a time object. Like a date object, datetime assumes
     the current Gregorian calendar extended in both directions; like a time object,
@@ -1392,8 +1394,8 @@ class datetime:
         """
         if self._tzinfo is None:
             return None
+        print('tz:', self._tzinfo)
         offset = self._tzinfo.utcoffset(self)
-        print(offset)
         _check_utc_offset("utcoffset", offset)
         return offset
 
@@ -1445,6 +1447,7 @@ class datetime:
                           self._microsecond, timespec))
 
         off = self.utcoffset()
+        print(off)
         tz = _format_offset(off)
         if tz:
             s += tz
