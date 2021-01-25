@@ -74,7 +74,6 @@ def _check_tzinfo_arg(timezone):
 
 def _check_utc_offset(name, offset):
     assert name in ("utcoffset", "dst")
-    print(offset)
     if offset is None:
         return
     if not isinstance(offset, timedelta):
@@ -606,6 +605,61 @@ class timedelta:
             return q, timedelta(0, 0, r)
         return NotImplemented
 
+
+    # Comparisons of timedelta objects with other.
+
+    def __eq__(self, other):
+        if isinstance(other, timedelta):
+            return self._cmp(other) == 0
+        else:
+            return False
+
+    def __ne__(self, other):
+        if isinstance(other, timedelta):
+            return self._cmp(other) != 0
+        else:
+            return True
+
+    def __le__(self, other):
+        if isinstance(other, timedelta):
+            return self._cmp(other) <= 0
+        else:
+            _cmperror(self, other)
+
+    def __lt__(self, other):
+        if isinstance(other, timedelta):
+            return self._cmp(other) < 0
+        else:
+            _cmperror(self, other)
+
+    def __ge__(self, other):
+        if isinstance(other, timedelta):
+            return self._cmp(other) >= 0
+        else:
+            _cmperror(self, other)
+
+    def __gt__(self, other):
+        if isinstance(other, timedelta):
+            return self._cmp(other) > 0
+        else:
+            _cmperror(self, other)
+
+    def _cmp(self, other):
+        assert isinstance(other, timedelta)
+        return _cmp(self._getstate(), other._getstate())
+
+    def __hash__(self):
+        return hash(self._getstate())
+
+    def __bool__(self):
+        return (self._days != 0 or
+                self._seconds != 0 or
+                self._microseconds != 0)
+
+    def _getstate(self):
+        return (self._days, self._seconds, self._microseconds)
+
+
 # pylint: disable=no-self-use
 class tzinfo:
     """This is an abstract base class, meaning that this class should not
@@ -790,10 +844,8 @@ class date:
         return (self.__class__, self._getstate())
 
 class timezone(tzinfo):
-    """The timezone class is a subclass of tzinfo, each instance of
-    which represents a timezone defined by a fixed offset from UTC.
+    __slots__ = '_offset', '_name'
 
-    """
     # Sentinel value to disallow None
     _Omitted = object()
     def __new__(cls, offset, name=_Omitted):
@@ -822,36 +874,26 @@ class timezone(tzinfo):
         self._name = name
         return self
 
-    @staticmethod
-    def _name_from_offset(delta):
-        if delta < timedelta(0):
-            sign = '-'
-            delta = -delta
-        else:
-            sign = '+'
-        hours, rest = divmod(delta, timedelta(hours=1))
-        minutes = rest // timedelta(minutes=1)
-        return 'UTC{}{:02d}:{:02d}'.format(sign, hours, minutes)
+    def __eq__(self, other):
+        if type(other) != timezone:
+            return False
+        return self._offset == other._offset
 
+    def __hash__(self):
+        return hash(self._offset)
 
     def __repr__(self):
-        """Convert to formal string, for repr().
-        >>> tz = timezone.utc
-        >>> repr(tz)
-        'datetime.timezone.utc'
-        >>> tz = timezone(timedelta(hours=-5), 'EST')
-        >>> repr(tz)
-        "datetime.timezone(datetime.timedelta(-1, 68400), 'EST')"
-        """
+        """Convert to formal string, for repr()."""
         if self is self.utc:
             return 'datetime.timezone.utc'
         if self._name is None:
-            return "%s.%s(%r)" % (self.__class__.__module__,
-                                  self.__class__.__qualname__,
-                                  self._offset)
-        return "%s.%s(%r, %r)" % (self.__class__.__module__,
-                                  self.__class__.__qualname__,
-                                  self._offset, self._name)
+            return "%s(%r)" % ('datetime.' + self.__class__.__name__,
+                               self._offset)
+        return "%s(%r, %r)" % ('datetime.' + self.__class__.__name__,
+                               self._offset, self._name)
+
+    def __str__(self):
+        return self.tzname(None)
 
     def utcoffset(self, dt):
         if isinstance(dt, datetime) or dt is None:
@@ -867,20 +909,6 @@ class timezone(tzinfo):
         raise TypeError("tzname() argument must be a datetime instance"
                         " or None")
 
-    def dst(self, dt):
-        if isinstance(dt, datetime) or dt is None:
-            return None
-        raise TypeError("dst() argument must be a datetime instance"
-                        " or None")
-
-    def fromutc(self, dt):
-        if isinstance(dt, datetime):
-            if dt.tzinfo is not self:
-                raise ValueError("fromutc: dt.tzinfo "
-                                 "is not self")
-            return dt + self._offset
-        raise TypeError("fromutc() argument must be a datetime instance"
-                        " or None")
 
     @staticmethod
     def _name_from_offset(delta):
@@ -895,7 +923,6 @@ class timezone(tzinfo):
 
     _maxoffset = timedelta(hours=23, minutes=59)
     _minoffset = -_maxoffset
-
 
 class time:
     """A time object represents a (local) time of day, independent of
