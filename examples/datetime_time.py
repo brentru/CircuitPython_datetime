@@ -1,5 +1,5 @@
 # Example of working with a `time` object
-from adafruit_datetime import time, tzinfo, timedelta, timezone
+from adafruit_datetime import time, timezone
 
 # Create a new time object
 t = time(12, 10, 30, tzinfo=timezone.utc)

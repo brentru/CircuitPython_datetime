@@ -1,3 +1,4 @@
+# Example of working with a `datetime` object
 from adafruit_datetime import datetime, date, time, timezone
 
 # Using datetime.combine()
