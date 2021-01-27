@@ -1,7 +1,9 @@
-# SPDX-FileCopyrightText: 2001-2021 Python Software Foundation. All rights reserved.
+# SPDX-FileCopyrightText: 2001-2021 Python Software Foundation.All rights reserved.
 # SPDX-FileCopyrightText: 2000 BeOpen.com. All rights reserved.
-# SPDX-FileCopyrightText: 1995-2001 Corporation for National Research Initiatives. All rights reserved.
-# SPDX-FileCopyrightText: 1995-2001 Corporation for National Research Initiatives. All rights reserved.
+# SPDX-FileCopyrightText: 1995-2001 Corporation for National Research Initiatives.
+#                         All rights reserved.
+# SPDX-FileCopyrightText: 1995-2001 Corporation for National Research Initiatives.
+#                         All rights reserved.
 # SPDX-FileCopyrightText: 1991-1995 Stichting Mathematisch Centrum. All rights reserved.
 # SPDX-FileCopyrightText: 2017 Paul Sokolovsky
 """

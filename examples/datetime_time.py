@@ -1,4 +1,5 @@
 # Example of working with a `time` object
+# from https://docs.python.org/3/library/datetime.html#examples-of-usage-time
 from adafruit_datetime import time, timezone
 
 # Create a new time object

@@ -1,4 +1,5 @@
 # Example of working with a `datetime` object
+# from https://docs.python.org/3/library/datetime.html#examples-of-usage-datetime
 from adafruit_datetime import datetime, date, time, timezone
 
 # Using datetime.combine()

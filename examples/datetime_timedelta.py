@@ -1,4 +1,5 @@
 # Example of working with a `timedelta` object
+# from https://docs.python.org/3/library/datetime.html#examples-of-usage-timedelta
 from adafruit_datetime import timedelta
 
 # Example of normalization
