@@ -1,7 +1,9 @@
-# SPDX-FileCopyrightText: 2017 Scott Shawcroft, written for Adafruit Industries
-# SPDX-FileCopyrightText: Copyright (c) 2021 Brent Rubell for Adafruit Industries
-#
-# SPDX-License-Identifier: MIT
+# SPDX-FileCopyrightText: 2001-2021 Python Software Foundation. All rights reserved.
+# SPDX-FileCopyrightText: 2000 BeOpen.com. All rights reserved.
+# SPDX-FileCopyrightText: 1995-2001 Corporation for National Research Initiatives. All rights reserved.
+# SPDX-FileCopyrightText: 1995-2001 Corporation for National Research Initiatives. All rights reserved.
+# SPDX-FileCopyrightText: 1991-1995 Stichting Mathematisch Centrum. All rights reserved.
+# SPDX-FileCopyrightText: 2017 Paul Sokolovsky
 """
 `adafruit_datetime`
 ================================================================================
@@ -9,8 +11,6 @@ Concrete date/time and related types.
 
 See http://www.iana.org/time-zones/repository/tz-link.html for
 time zone and DST data sources.
-
-* Author(s): Brent Rubell
 
 Implementation Notes
 --------------------
@@ -29,9 +29,7 @@ from micropython import const
 __version__ = "0.0.0-auto.0"
 __repo__ = "https://github.com/adafruit/Adafruit_CircuitPython_DateTime.git"
 
-# Utility functions
-
-# The datetime module exports the following constants:
+# Constants
 MINYEAR = const(1)
 MAXYEAR = const(9999)
 _MAXORDINAL = const(3652059)
@@ -42,11 +40,24 @@ _DI4Y = const(1461)
 _DAYS_IN_MONTH = (None, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
 _DAYS_BEFORE_MONTH = (None, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
 # Month and day names.  For localized versions, see the calendar module.
-_MONTHNAMES = (None, "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-                     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+_MONTHNAMES = (
+    None,
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+)
 _DAYNAMES = (None, "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 
-# universally shared
+# Utility functions - universal
 def _cmp(obj_x, obj_y):
     return 0 if obj_x == obj_y else 1 if obj_x > obj_y else -1
 
@@ -57,7 +68,7 @@ def _cmperror(obj_x, obj_y):
     )
 
 
-# time
+# Utility functions - time
 def _check_time_fields(hour, minute, second, microsecond, fold):
     if not isinstance(hour, int):
         raise TypeError("Hour expected as int")
@@ -71,11 +82,6 @@ def _check_time_fields(hour, minute, second, microsecond, fold):
         raise ValueError("microsecond must be in 0..999999", microsecond)
     if fold not in (0, 1):  # from CPython API
         raise ValueError("fold must be either 0 or 1", fold)
-
-
-def _check_tzinfo_arg(time_zone):
-    if time_zone is not None and not isinstance(time_zone, tzinfo):
-        raise TypeError("tzinfo argument must be None or of a tzinfo subclass")
 
 
 def _check_utc_offset(name, offset):
@@ -189,7 +195,7 @@ def _wrap_strftime(time_obj, strftime_fmt, timetuple):
     return _time.strftime(newformat, timetuple)
 
 
-# timezone
+# Utility functions - timezone
 def _check_tzname(name):
     """"Just raise TypeError if the arg isn't None or a string."""
     if name is not None and not isinstance(name, str):
@@ -198,24 +204,12 @@ def _check_tzname(name):
         )
 
 
-# date
-def _parse_isoformat_date(dtstr):
-    # It is assumed that this function will only be called with a
-    # string of length exactly 10, and (though this is not used) ASCII-only
-    year = int(dtstr[0:4])
-    if dtstr[4] != "-":
-        raise ValueError("Invalid date separator: %s" % dtstr[4])
-
-    month = int(dtstr[5:7])
-
-    if dtstr[7] != "-":
-        raise ValueError("Invalid date separator")
-
-    day = int(dtstr[8:10])
-
-    return [year, month, day]
+def _check_tzinfo_arg(time_zone):
+    if time_zone is not None and not isinstance(time_zone, tzinfo):
+        raise TypeError("tzinfo argument must be None or of a tzinfo subclass")
 
 
+# Utility functions - date
 def _is_leap(year):
     "year -> 1 if leap year, else 0."
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
@@ -385,8 +379,6 @@ class timedelta:
 
     """
 
-    __slots__ = "_days", "_seconds", "_microseconds", "_hashcode"
-
     # pylint: disable=too-many-arguments
     def __new__(
         cls,
@@ -398,14 +390,6 @@ class timedelta:
         hours=0,
         weeks=0,
     ):
-
-        # Doing this efficiently and accurately in C is going to be difficult
-        # and error-prone, due to ubiquitous overflow possibilities, and that
-        # C double doesn't have enough bits of precision to represent
-        # microseconds over 10K years faithfully.  The code here tries to make
-        # explicit where go-fast assumptions can be relied on, in order to
-        # guide the C implementation; it's way more convoluted than speed-
-        # ignoring auto-overflow-to-long idiomatic Python could be.
 
         # Check that all inputs are ints or floats.
         if not all(
@@ -424,7 +408,6 @@ class timedelta:
         microseconds += milliseconds * 1000
 
         # Get rid of all fractions, and normalize s and us.
-        # Take a deep breath <wink>.
         if isinstance(days, float):
             dayfrac, days = _math.modf(days)
             daysecondsfrac, daysecondswhole = _math.modf(dayfrac * (24.0 * 3600.0))
@@ -503,22 +486,23 @@ class timedelta:
         self._hashcode = -1
         return self
 
-    # Read-only properties
+    # Instance attributes (read-only)
     @property
     def days(self):
-        """Days"""
+        """Days, Between -999999999 and 999999999 inclusive"""
         return self._days
 
     @property
     def seconds(self):
-        """Seconds"""
+        """Seconds, Between 0 and 86399 inclusive"""
         return self._seconds
 
     @property
     def microseconds(self):
-        """Microseconds"""
+        """Microseconds, Between 0 and 999999 inclusive"""
         return self._microseconds
 
+    # Instance methods
     def total_seconds(self):
         """Return the total number of seconds contained in the duration."""
         return (
@@ -555,6 +539,7 @@ class timedelta:
             s = s + ".%06d" % self._microseconds
         return s
 
+    # Supported operations
     def __neg__(self):
         return timedelta(-self._days, -self._seconds, -self._microseconds)
 
@@ -615,8 +600,7 @@ class timedelta:
 
     __rmul__ = __mul__
 
-    # Comparisons of timedelta objects with other.
-
+    # Supported comparisons
     def __eq__(self, other):
         if not isinstance(other, timedelta):
             return False
@@ -699,8 +683,6 @@ class date:
 
     """
 
-    __slots__ = "_year", "_month", "_day", "_hashcode"
-
     def __new__(cls, year, month, day):
         """Creates a new date object.
 
@@ -716,7 +698,7 @@ class date:
         self._hashcode = -1
         return self
 
-    # Instance attributes, read-only
+    # Instance attributes (read-only)
     @property
     def year(self):
         """Between MINYEAR and MAXYEAR inclusive."""
@@ -732,7 +714,7 @@ class date:
         """Between 1 and the number of days in the given month of the given year."""
         return self._day
 
-    # Class methods
+    # Class Methods
     @classmethod
     def fromtimestamp(cls, t):
         """Return the local date corresponding to the POSIX timestamp,
@@ -757,16 +739,7 @@ class date:
         """Return the current local date."""
         return cls.fromtimestamp(_time.time())
 
-    # Instance methods
-    def __repr__(self):
-        """Convert to formal string, for repr()."""
-        return "%s(%d, %d, %d)" % (
-            "datetime." + self.__class__.__name__,
-            self._year,
-            self._month,
-            self._day,
-        )
-
+    # Instance Methods
     def replace(self, year=None, month=None, day=None):
         """Return a date with the same value, except for those parameters
         given new values by whichever keyword arguments are specified.
@@ -805,8 +778,16 @@ class date:
     # For a date d, str(d) is equivalent to d.isoformat()
     __str__ = isoformat
 
-    # Comparisons of date objects with other
+    def __repr__(self):
+        """Convert to formal string, for repr()."""
+        return "%s(%d, %d, %d)" % (
+            "datetime." + self.__class__.__name__,
+            self._year,
+            self._month,
+            self._day,
+        )
 
+    # Supported comparisons
     def __eq__(self, other):
         if isinstance(other, date):
             return self._cmp(other) == 0
@@ -839,7 +820,6 @@ class date:
         return _cmp((y, m, d), (y2, m2, d2))
 
     def __hash__(self):
-        "Hash."
         if self._hashcode == -1:
             self._hashcode = hash(self._getstate())
         return self._hashcode
@@ -852,9 +832,6 @@ class date:
     def _setstate(self, string):
         yhi, ylo, self._month, self._day = string
         self._year = yhi * 256 + ylo
-
-    def __reduce__(self):
-        return (self.__class__, self._getstate())
 
 
 class timezone(tzinfo):
@@ -900,6 +877,20 @@ class timezone(tzinfo):
         self._name = name
         return self
 
+    # Instance methods
+    def utcoffset(self, dt):
+        if isinstance(dt, datetime) or dt is None:
+            return self._offset
+        raise TypeError("utcoffset() argument must be a datetime instance" " or None")
+
+    def tzname(self, dt):
+        if isinstance(dt, datetime) or dt is None:
+            if self._name is None:
+                return self._name_from_offset(self._offset)
+            return self._name
+        raise TypeError("tzname() argument must be a datetime instance" " or None")
+
+    # Comparison to other timezone objects
     def __eq__(self, other):
         if not isinstance(other, timezone):
             return False
@@ -923,18 +914,6 @@ class timezone(tzinfo):
     def __str__(self):
         return self.tzname(None)
 
-    def utcoffset(self, dt):
-        if isinstance(dt, datetime) or dt is None:
-            return self._offset
-        raise TypeError("utcoffset() argument must be a datetime instance" " or None")
-
-    def tzname(self, dt):
-        if isinstance(dt, datetime) or dt is None:
-            if self._name is None:
-                return self._name_from_offset(self._offset)
-            return self._name
-        raise TypeError("tzname() argument must be a datetime instance" " or None")
-
     @staticmethod
     def _name_from_offset(delta):
         if delta < timedelta(0):
@@ -955,17 +934,6 @@ class time:
     any particular day, and subject to adjustment via a tzinfo object.
 
     """
-
-    # Using __slots__ to reduce object's RAM usage
-    __slots__ = (
-        "_hour",
-        "_minute",
-        "_second",
-        "_microsecond",
-        "_tzinfo",
-        "_hashcode",
-        "_fold",
-    )
 
     # pylint: disable=redefined-outer-name
     def __new__(cls, hour=0, minute=0, second=0, microsecond=0, tzinfo=None, *, fold=0):
@@ -1014,8 +982,61 @@ class time:
         """
         return self._tzinfo
 
+    # Instance methods
+    def isoformat(self, timespec="auto"):
+        """Return a string representing the time in ISO 8601 format, one of:
+        HH:MM:SS.ffffff, if microsecond is not 0
+
+        HH:MM:SS, if microsecond is 0
+
+        HH:MM:SS.ffffff+HH:MM[:SS[.ffffff]], if utcoffset() does not return None
+
+        HH:MM:SS+HH:MM[:SS[.ffffff]], if microsecond is 0 and utcoffset() does not return None
+
+        """
+        s = _format_time(
+            self._hour, self._minute, self._second, self._microsecond, timespec
+        )
+        tz = self._tzstr()
+        if tz:
+            s += tz
+        return s
+
+    # For a time t, str(t) is equivalent to t.isoformat()
+    __str__ = isoformat
+
+    def strftime(self, fmt):
+        """Format using strftime().  The date part of the timestamp passed
+        to underlying strftime should not be used.
+        """
+        # The year must be >= 1000 else Python's strftime implementation
+        # can raise a bogus exception.
+        timetuple = (1900, 1, 1, self._hour, self._minute, self._second, 0, 1, -1)
+        return _wrap_strftime(self, fmt, timetuple)
+
+    def utcoffset(self):
+        """Return the timezone offset in minutes east of UTC (negative west of
+        UTC)."""
+        if self._tzinfo is None:
+            return None
+        offset = self._tzinfo.utcoffset(None)
+        _check_utc_offset("utcoffset", offset)
+        return offset
+
+    def tzname(self):
+        """Return the timezone name.
+
+        Note that the name is 100% informational -- there's no requirement that
+        it mean anything in particular. For example, "GMT", "UTC", "-500",
+        "-5:00", "EDT", "US/Eastern", "America/New York" are all valid replies.
+        """
+        if self._tzinfo is None:
+            return None
+        name = self._tzinfo.tzname(None)
+        _check_tzname(name)
+        return name
+
     # Standard conversions and comparisons
-    # From CPython, https://github.com/python/cpython/blob/master/Lib/datetime.py
     def __eq__(self, other):
         if not isinstance(other, time):
             return NotImplemented
@@ -1070,8 +1091,6 @@ class time:
             (othhmm, other.second, other.microsecond),
         )
 
-    # from CPython
-    # https://github.com/python/cpython/blob/master/Lib/datetime.py
     def __hash__(self):
         """Hash."""
         if self._hashcode == -1:
@@ -1092,28 +1111,6 @@ class time:
                     self._hashcode = hash((h, m, self.second, self.microsecond))
         return self._hashcode
 
-    def isoformat(self, timespec="auto"):
-        """Return a string representing the time in ISO 8601 format, one of:
-        HH:MM:SS.ffffff, if microsecond is not 0
-
-        HH:MM:SS, if microsecond is 0
-
-        HH:MM:SS.ffffff+HH:MM[:SS[.ffffff]], if utcoffset() does not return None
-
-        HH:MM:SS+HH:MM[:SS[.ffffff]], if microsecond is 0 and utcoffset() does not return None
-
-        """
-        s = _format_time(
-            self._hour, self._minute, self._second, self._microsecond, timespec
-        )
-        tz = self._tzstr()
-        if tz:
-            s += tz
-        return s
-
-    # For a time t, str(t) is equivalent to t.isoformat()
-    __str__ = isoformat
-
     def _tzstr(self, sep=":"):
         """Return formatted timezone offset (+xx:xx) or None."""
         off = self.utcoffset()
@@ -1130,17 +1127,6 @@ class time:
             off = "%s%02d%s%02d" % (sign, hh, sep, mm)
         return off
 
-    def strftime(self, fmt):
-        """Format using strftime().  The date part of the timestamp passed
-        to underlying strftime should not be used.
-        """
-        # The year must be >= 1000 else Python's strftime implementation
-        # can raise a bogus exception.
-        timetuple = (1900, 1, 1, self._hour, self._minute, self._second, 0, 1, -1)
-        return _wrap_strftime(self, fmt, timetuple)
-
-    # from CPython
-    # https://github.com/python/cpython/blob/master/Lib/datetime.py
     def __format__(self, fmt):
         if not isinstance(fmt, str):
             raise TypeError("must be str, not %s" % type(fmt).__name__)
@@ -1156,35 +1142,16 @@ class time:
             s = ", %d" % self._second
         else:
             s = ""
-        s= "%s(%d, %d%s)" % ('datetime.' + self.__class__.__name__,
-                             self._hour, self._minute, s)
+        s = "%s(%d, %d%s)" % (
+            "datetime." + self.__class__.__name__,
+            self._hour,
+            self._minute,
+            s,
+        )
         if self._tzinfo is not None:
             assert s[-1:] == ")"
             s = s[:-1] + ", tzinfo=%r" % self._tzinfo + ")"
         return s
-
-    # Timezone functions
-    def utcoffset(self):
-        """Return the timezone offset in minutes east of UTC (negative west of
-        UTC)."""
-        if self._tzinfo is None:
-            return None
-        offset = self._tzinfo.utcoffset(None)
-        _check_utc_offset("utcoffset", offset)
-        return offset
-
-    def tzname(self):
-        """Return the timezone name.
-
-        Note that the name is 100% informational -- there's no requirement that
-        it mean anything in particular. For example, "GMT", "UTC", "-500",
-        "-5:00", "EDT", "US/Eastern", "America/New York" are all valid replies.
-        """
-        if self._tzinfo is None:
-            return None
-        name = self._tzinfo.tzname(None)
-        _check_tzname(name)
-        return name
 
     # Pickle support
     def _getstate(self, protocol=3):
@@ -1222,7 +1189,6 @@ class datetime(date):
         *,
         fold=0
     ):
-        # check date and time fields
         _check_date_fields(year, month, day)
         _check_time_fields(hour, minute, second, microsecond, fold)
         _check_tzinfo_arg(tzinfo)
@@ -1389,7 +1355,6 @@ class datetime(date):
         )
 
     # Instance methods
-
     def _mktime(self):
         """Return integer POSIX timestamp."""
         epoch = datetime(1970, 1, 1)
@@ -1491,16 +1456,13 @@ class datetime(date):
         """Return the day of the week as an integer, where Monday is 0 and Sunday is 6."""
         return (self.toordinal() + 6) % 7
 
-
     def strftime(self, fmt):
         """Format using strftime().  The date part of the timestamp passed
         to underlying strftime should not be used.
         """
         # The year must be >= 1000 else Python's strftime implementation
         # can raise a bogus exception.
-        timetuple = (1900, 1, 1,
-                     self._hour, self._minute, self._second,
-                     0, 1, -1)
+        timetuple = (1900, 1, 1, self._hour, self._minute, self._second, 0, 1, -1)
         return _wrap_strftime(self, fmt, timetuple)
 
     def __format__(self, fmt):

@@ -7,7 +7,6 @@ import sys
 sys.path.append("..")
 from adafruit_datetime import time as cpy_time
 
-# TODO: This should be shared
 # An arbitrary collection of objects of non-datetime types, for testing
 # mixed-type comparisons.
 OTHERSTUFF = (10, 34.5, "abc", {}, [], ())
@@ -15,7 +14,6 @@ OTHERSTUFF = (10, 34.5, "abc", {}, [], ())
 #############################################################################
 # Base class for testing a particular aspect of timedelta, time, date and
 # datetime comparisons.
-# TODO: This may need to get moved and imported
 
 class HarmlessMixedComparison:
     # Test that __eq__ and __ne__ don't complain for mixed-type comparisons.
@@ -255,9 +253,8 @@ class TestTime(HarmlessMixedComparison, unittest.TestCase):
         self.assertEqual(str(self.theclass(12, 2, 3, 0)), "12:02:03")
         self.assertEqual(str(self.theclass(23, 15, 0, 0)), "23:15:00")
 
-    # modified for adafruit_datetime
     def test_repr(self):
-        name = 'adafruit_datetime.' + self.theclass.__name__
+        name = 'datetime.' + self.theclass.__name__
         self.assertEqual(repr(self.theclass(1, 2, 3, 4)),
                          "%s(1, 2, 3, 4)" % name)
         self.assertEqual(repr(self.theclass(10, 2, 3, 4000)),
