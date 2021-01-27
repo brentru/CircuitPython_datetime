@@ -689,6 +689,7 @@ class tzinfo:
         dtoff = dt.utcoffset()
         if dtoff is None:
             raise ValueError("fromutc() requires a non-None utcoffset() " "result")
+        return dt + self._offset
 
 
 class date:
