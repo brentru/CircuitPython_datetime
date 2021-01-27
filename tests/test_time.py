@@ -1,5 +1,5 @@
+# Implements a subset of https://github.com/python/cpython/blob/master/Lib/test/datetimetester.py
 import unittest
-import time
 # CPython standard implementation
 from datetime import time as cpython_time
 # CircuitPython subset implementation

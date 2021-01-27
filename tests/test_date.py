@@ -1,3 +1,4 @@
+# Implements a subset of https://github.com/python/cpython/blob/master/Lib/test/datetimetester.py
 import sys
 import unittest
 # CPython standard implementation

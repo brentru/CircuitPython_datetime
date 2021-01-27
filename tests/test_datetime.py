@@ -1,6 +1,6 @@
+# Implements a subset of https://github.com/python/cpython/blob/master/Lib/test/datetimetester.py
 import sys
 import unittest
-from unittest.case import skip
 from test import support
 from test_date import TestDate
 # CPython standard implementation
