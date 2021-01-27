@@ -1156,19 +1156,11 @@ class time:
             s = ", %d" % self._second
         else:
             s = ""
-        s = "%s.%s(%d, %d%s)" % (
-            self.__class__.__module__,
-            self.__class__.__qualname__,
-            self._hour,
-            self._minute,
-            s,
-        )
+        s= "%s(%d, %d%s)" % ('datetime.' + self.__class__.__name__,
+                             self._hour, self._minute, s)
         if self._tzinfo is not None:
             assert s[-1:] == ")"
             s = s[:-1] + ", tzinfo=%r" % self._tzinfo + ")"
-        if self._fold:
-            assert s[-1:] == ")"
-            s = s[:-1] + ", fold=1)"
         return s
 
     # Timezone functions
